@@ -1,0 +1,18 @@
+project_id       = "your-project-id"
+region           = "europe-west1"
+location         = "EU"
+credentials_file = "credentials.json"
+
+# Cloud Function Source
+function_source_dir = "../validator_src"
+
+# BigQuery Settings
+bq_schema_file         = "src/bq_schema/bq_schema.json"
+EVENT_NAME_ATTRIBUTE   = "event_name"
+EVENT_DATA_PATH        = "data"
+LOG_VALID_FIELDS_FLAG  = true
+LOG_PAYLOAD_TO_BQ_FLAG = true
+
+# Deletion Safeguards (Recommended: true for production)
+deletion_protection   = true
+force_destroy_buckets = false

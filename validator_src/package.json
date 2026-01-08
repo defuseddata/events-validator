@@ -1,0 +1,24 @@
+{
+  "name": "events-validator-ga",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "dotenv npx functions-framework"
+  },
+  "author": "r4v-su",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "dotenv-cli": "^10.0.0"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^4.0.0",
+    "@google-cloud/bigquery": "^8.1.1",
+    "@google-cloud/storage": "^7.16.0",
+    "node-fetch": "^3.3.2",
+    "tr46": "^5.1.1",
+    "uuid": "^11.1.0",
+    "whatwg-url": "^14.2.0"
+  }
+}

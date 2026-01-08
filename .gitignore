@@ -1,0 +1,53 @@
+# agent files
+.dev/
+
+# dependencies
+node_modules/
+
+# env files
+.env
+**/.env
+.env.local
+
+# system files
+.DS_Store
+Thumbs.db
+gcp_gateway_API_KEY
+openapi2-functionsv1.yaml
+
+# --- Python / Streamlit ---
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+.streamlit/
+
+# --- Testy / cache ---
+.pytest_cache/
+.mypy_cache/
+.cache/
+
+# --- GCP / credentials ---
+*-terraform-sandbox-*.json
+*.json
+!package.json
+!package-lock.json
+!validator_src/package.json
+!validator_src/package-lock.json
+!example_req_body.json
+!terraform_ev/src/bq_schema/*.json
+!terraform_ev/src/test_schemas/*.json
+
+
+# --- Terraform ---
+.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/state.json
+**/code.zip
+*.log
+*.tfvars
+*.tfvars.json
+.terraform.lock.hcl
+!*.tfvars.example
+!.env.example
