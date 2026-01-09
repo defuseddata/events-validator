@@ -25,10 +25,21 @@ resource "google_storage_bucket_object" "eventvalidatorfunction_object" {
 }
 
 
-resource "google_storage_bucket_object" "example_schema" {
-  name   = "example.json"
+# 3. Initial Data (GA4 Recommended)
+
+# Batch upload all 36 recommended schemas
+resource "google_storage_bucket_object" "initial_schemas" {
+  for_each = fileset("${path.module}/src/GA4 Recommended/schemas/", "*.json")
+
+  name   = each.value
+  source = "${path.module}/src/GA4 Recommended/schemas/${each.value}"
   bucket = google_storage_bucket.eventvalidator_schemas_bucket.name
-  source = "${path.module}/src/test_schemas/example.json"
-  provider = google
+}
+
+# Upload the master repository file
+resource "google_storage_bucket_object" "ga4_repo_json" {
+  name   = "repo.json"
+  bucket = google_storage_bucket.eventvalidator_schemas_bucket.name
+  source = "${path.module}/src/GA4 Recommended/repo.json"
 }
 

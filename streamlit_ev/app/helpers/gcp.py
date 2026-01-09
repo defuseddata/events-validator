@@ -21,17 +21,20 @@ def get_bucket():
         return _bucket_ref
         
     try:
-        if not os.path.exists(credentials_path):
-            print(f"Warning: Credentials file not found at {credentials_path}")
-            return None
-            
-        service_account_info = json.load(open(credentials_path))
-        credentials = service_account.Credentials.from_service_account_info(
-            service_account_info
-        )
-        client = storage.Client(project, credentials=credentials)
+        # If the env var points to a missing file (like in Cloud Run), 
+        # we must unset it so storage.Client() can fall back to IAM/ADC.
+        creds_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if creds_env and not os.path.exists(creds_env):
+            del os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+
+        # storage.Client() automatically handles the fallback:
+        # 1. Environment variable (GOOGLE_APPLICATION_CREDENTIALS) - if valid
+        # 2. Attached Service Account (Cloud Run / IAM)
+        # 3. Local gcloud credentials
+        client = storage.Client(project=project)
         _bucket_ref = client.bucket(bucket_name)
     except Exception as e:
+        st.error(f"GCP Init Error: {e}")
         print(f"Warning: Could not initialize GCP client: {e}")
         return None
         

@@ -35,7 +35,7 @@ You need a **Deployer Service Account** to run Terraform. **Never commit the `.j
         *   `Cloud Functions Admin` & `Cloud Run Admin` (For the validator function)
         *   `API Gateway Admin` & `Service Management Administrator` (For the entry point)
         *   `BigQuery Admin` & `Storage Admin` (For logs and schemas)
-        *   `Service Account Admin` & `Service Account Key Admin` (Required for automated Streamlit key export)
+        *   `Service Account Admin` (To create user identities)
         *   `Project IAM Admin` (To grant permissions to the worker account)
         *   `Service Usage Admin` (To enable APIs automatically)
     *   `Service Account User` (Always required for Terraform to deploy resources)
@@ -51,11 +51,10 @@ To achieve a "Zero-Touch" experience, Terraform manages most configuration files
 | :--- | :--- | :--- | :--- |
 | `terraform_ev/credentials.json` | Infra | **User** | Deployer Service Account key (Manual). |
 | `terraform_ev/terraform.tfvars` | Infra | **User** | Project configuration (Manual). |
-| `streamlit_ev/credentials.json` | UI | **Terraform** | Worker Service Account key (Automated). |
-| `streamlit_ev/.env` | UI | **Terraform** | App config: Bucket, Project, etc. (Automated). |
+| `streamlit_ev/.env` | UI | **Terraform** | App config: Bucket, Project, etc. |
 
 > [!IMPORTANT]
-> Files owned by **Terraform** are overwritten on every `apply`. Do not edit them manually.
+> Files owned by **Terraform** are managed automatically. Do not edit them manually.
 
 ---
 
@@ -66,7 +65,7 @@ To achieve a "Zero-Touch" experience, Terraform manages most configuration files
     cd terraform_ev
     cp terraform.tfvars.example terraform.tfvars
     ```
-2.  **Configure**: Edit `terraform.tfvars` with your `project_id` and point `credentials_file` to your JSON key.
+2.  **Configure**: Edit `terraform.tfvars` with your `project_id`, `region`, `location`, and the IAP credentials you created in the prerequisites.
 3.  **Deploy**:
     ```bash
     terraform init
@@ -102,17 +101,38 @@ To achieve a "Zero-Touch" experience, Terraform manages most configuration files
 
 The `streamlit_ev/` application provides a "Parameter Repository" approach to schema management.
 
-### Fully Automated Setup
+### Keyless Setup
 If you deployed using the steps above, Terraform has already:
 1.  Created a dedicated `streamlit-worker` Service Account.
-2.  Exported `streamlit_ev/credentials.json`.
+2.  Granted it `Storage Object Admin` permissions on the schema bucket.
 3.  Generated `streamlit_ev/.env` with your project and bucket details.
 
 ### Local Start
-1.  `cd streamlit_ev`
-2.  `python3 -m venv venv && source venv/bin/activate`
-3.  `pip install -r requirements.txt`
-4.  `streamlit run app/app.py`
+1.  **Authenticate**: `gcloud auth application-default login`
+2.  `cd streamlit_ev`
+3.  `python3 -m venv venv && source venv/bin/activate`
+4.  `pip install -r requirements.txt`
+5.  `streamlit run app/app.py`
+
+### Production Deployment (Cloud Run + IAP)
+
+#### 1. Manual Prerequisites
+Before deploying to the cloud, you **must**:
+1.  **OAuth Consent Screen**: Set to "Internal" and add `iap.googleapis.com` scope.
+2.  **OAuth Client ID**: Create a "Web Internal" ID and add this Redirect URI:
+    `https://iap.googleapis.com/v1/oauth/clientIds/YOUR_CLIENT_ID:handleRedirect`
+3.  **Update Vars**: Add `iap_client_id`, `iap_client_secret`, and `authorized_users` to your `terraform.tfvars`.
+
+#### 2. Build and Deploy
+1.  **Build Image**:
+    ```bash
+    gcloud builds submit --tag [REGION]-docker.pkg.dev/[PROJECT_ID]/event-validator-ui-repo/event-validator-ui:latest ./streamlit_ev
+    ```
+2.  **Terraform Apply**:
+    ```bash
+    cd terraform_ev
+    terraform apply
+    ```
 
 ### Features
 - **Params Repo**: Centralized database of parameters with strict type validation.

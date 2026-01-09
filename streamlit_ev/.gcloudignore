@@ -1,0 +1,13 @@
+.git
+.gitignore
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+*.json
+!requirements.txt
+node_modules/
+.dev/

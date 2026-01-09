@@ -55,14 +55,40 @@ variable "EVENT_NAME_ATTRIBUTE" {
 }
 
 variable "deletion_protection" {
-  description = "Protect BigQuery tables from deletion"
+  description = "Protect resource from deletion"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "force_destroy_buckets" {
   description = "Allow deletion of buckets even if they contain objects"
   type        = bool
   default     = false
+}
+
+# --- IAP & Cloud Run Variables ---
+
+variable "iap_client_id" {
+  description = "OAuth 2.0 Client ID for IAP"
+  type        = string
+  sensitive   = true
+}
+
+variable "iap_client_secret" {
+  description = "OAuth 2.0 Client Secret for IAP"
+  type        = string
+  sensitive   = true
+}
+
+variable "authorized_users" {
+  description = "List of emails (users/groups) authorized to access the UI via IAP"
+  type        = list(string)
+  default     = []
+}
+
+variable "streamlit_image_tag" {
+  description = "The tag of the image to deploy for the Streamlit UI"
+  type        = string
+  default     = "latest"
 }
 

@@ -8,7 +8,9 @@ resource "google_project_service" "required_services" {
     "apigateway.googleapis.com",
     "servicecontrol.googleapis.com",
     "apikeys.googleapis.com",
-    "bigquery.googleapis.com"
+    "bigquery.googleapis.com",
+    "compute.googleapis.com",
+    "iap.googleapis.com"
   ])
 
   project = var.project_id

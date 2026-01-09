@@ -13,6 +13,12 @@ EVENT_DATA_PATH        = "data"
 LOG_VALID_FIELDS_FLAG  = true
 LOG_PAYLOAD_TO_BQ_FLAG = true
 
-# Deletion Safeguards (Recommended: true for production)
+# Deletion Safeguards (Recommended for production)
 deletion_protection   = true
 force_destroy_buckets = false
+
+# IAP Configuration (See .dev/CLEAN_START_GUIDE.md for setup)
+iap_client_id     = "YOUR_CLIENT_ID"
+iap_client_secret = "YOUR_CLIENT_SECRET"
+authorized_users  = ["user:you@example.com"]
+streamlit_image_tag = "latest"
