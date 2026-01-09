@@ -13,29 +13,38 @@ load_dotenv()
 
 st.set_page_config(page_title="Home", layout="wide")
 
-st.session_state.setdefault("page", "builder")
+st.session_state.setdefault("page", "home")
 st.session_state.setdefault("upload_status", None)
 
 st.session_state.setdefault("event_name", "")
 st.session_state.setdefault("schema", {})
 st.session_state.setdefault("schema_version", int(0))
 
+pages = ["Home", "Explorer", "Builder", "Params Repo", "Export"]
+# Map session state page to index
+current_page = st.session_state.page.lower()
+try:
+    default_idx = [p.lower() for p in pages].index(current_page)
+except ValueError:
+    default_idx = 0
+
 with st.container():
     selected = option_menu(
         None,
-        ["Home", "Explorer", "Builder", "Params Repo", "Export"],
+        pages,
         icons=["house", "list", "tools", "book", "file-earmark-arrow-up"],
         orientation="horizontal",
+        default_index=default_idx,
         styles={
             "container": {"padding": "0!important", "margin": "0", "width": "100%"},
             "nav-link": {"font-size": "14px", "text-align": "center", "margin": "0px", "padding": "10px"},
         }
     )
 
-if st.session_state.event_name:
-    st.info(f'🛠️ Active Schema: **{st.session_state["event_name"]}** (v{st.session_state["schema_version"]})')
-
-st.session_state.page = selected.lower()
+# Only update if the user manually clicked the menu
+if selected.lower() != st.session_state.page.lower():
+    st.session_state.page = selected.lower()
+    st.rerun()
 
 try:    
     if st.session_state.page == "builder":

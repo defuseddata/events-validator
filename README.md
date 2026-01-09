@@ -46,6 +46,7 @@ graph TD
 
 *   **Dynamic Schema Loading**: Loads JSON schemas from GCS based on event names.
 *   **BigQuery Logging**: Automatically logs validation results and processing errors for auditing.
+*   **Performance Optimized**: Parallel fetching and analysis (GCS + Health checks) ensures a snappy UI even with 100+ schemas.
 *   **API Gateway Secured**: Protected by API Keys with automated managed service activation.
 *   **Fully Automated**: One-click deployment with built-in propagation delays for stability.
 *   **GA4 Ready**: Pre-loaded with 36 recommended GA4 event schemas and a master parameter repository.
@@ -181,6 +182,8 @@ Before deploying to the cloud, you **must**:
 
 ### Features
 - **Params Repo**: Centralized database of parameters with strict type validation.
-- **Auto-Sync**: Propagate changes from the Repo to all GCS schemas with one click.
-- **Health Checks**: Automatically detect when GCS schemas are out of sync with your repository.
-- **Explorer**: Direct visibility into your GCS schema bucket.
+- **Smart Sync & Diff Review**: See exactly what changed (JSON diff) before syncing Repo updates to GCS.
+- **Performance Caching**: Session-based memoization for instant tab switching and bulk operations.
+- **Overridable Values**: Assign specific values in the Builder while staying synced with Repo metadata.
+- **Empty vs Zero Support**: Robust handling of numeric fields—set fields to "empty" (null) instead of forcing 0.0.
+- **Explorer**: Direct visibility and health-check analysis for your GCS schema bucket.
