@@ -2,6 +2,40 @@
 
 A scalable, serverless solution for real-time JSON event validation on Google Cloud Platform. 
 
+## 🏗️ Architecture
+
+```mermaid
+graph TD
+    %% Actors
+    User((User))
+    Source((Event Source))
+
+    %% UI Path
+    LB[HTTPS Load Balancer]
+    IAP{Identity-Aware Proxy}
+    WebUI[Streamlit UI<br/>Cloud Run]
+
+    %% API Path
+    APIGW[API Gateway]
+    CF[Validator Function<br/>Cloud Functions]
+
+    %% Data
+    GCS[(GCS Schema Bucket)]
+    BQ[(BigQuery Logs)]
+
+    %% UI Flow
+    User -->|HTTPS| LB
+    LB --> IAP
+    IAP -->|Authorized| WebUI
+    WebUI <-->|Read / Write| GCS
+
+    %% API Flow
+    Source -->|REST + API Key| APIGW
+    APIGW --> CF
+    CF -->|Fetch Schema| GCS
+    CF -->|Write Logs| BQ
+```
+
 ## 📁 Project Structure
 
 - **`validator_src/`**: Node.js source code for the Cloud Function.
