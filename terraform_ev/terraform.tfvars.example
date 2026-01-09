@@ -11,7 +11,8 @@ bq_schema_file         = "src/bq_schema/bq_schema.json"
 EVENT_NAME_ATTRIBUTE   = "event_name"
 EVENT_DATA_PATH        = "data"
 LOG_VALID_FIELDS_FLAG  = true
-LOG_PAYLOAD_TO_BQ_FLAG = true
+LOG_PAYLOAD_WHEN_ERROR_FLAG = true
+LOG_PAYLOAD_WHEN_VALID_FLAG = false
 
 # Deletion Safeguards (Recommended for production)
 deletion_protection   = true

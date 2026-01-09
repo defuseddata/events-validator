@@ -33,8 +33,13 @@ variable "bq_schema_file" {
 }
 
 
-variable "LOG_PAYLOAD_TO_BQ_FLAG" {
-  description = "Do you want to log payload into bigquery? (true/false)"
+variable "LOG_PAYLOAD_WHEN_ERROR_FLAG" {
+  description = "Do you want to log payload when validation fails? (true/false)"
+  type        = bool
+}
+
+variable "LOG_PAYLOAD_WHEN_VALID_FLAG" {
+  description = "Do you want to log payload when validation passes? (true/false)"
   type        = bool
 }
 
