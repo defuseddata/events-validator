@@ -16,6 +16,15 @@ A scalable, serverless solution for real-time JSON event validation on Google Cl
 *   **Fully Automated**: One-click deployment with built-in propagation delays for stability.
 *   **GA4 Ready**: Pre-loaded with 36 recommended GA4 event schemas and a master parameter repository.
 
+### 📊 Granular Logging Control
+Configure these flags in `terraform_ev/terraform.tfvars` to balance visibility with storage costs:
+
+| Flag | Description |
+| :--- | :--- |
+| `LOG_VALID_FIELDS_FLAG` | Logs every single validated field (even if correct). |
+| `LOG_PAYLOAD_WHEN_ERROR_FLAG` | Attaches the full JSON payload when an error is found. |
+| `LOG_PAYLOAD_WHEN_VALID_FLAG` | Attaches the full JSON payload for successful events. |
+
 ---
 
 ## 🛠 Prerequisites

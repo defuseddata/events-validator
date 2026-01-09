@@ -61,7 +61,7 @@ exports.validateEvent = (req, res) => {
             errorsLogged: errorLogEntries.length,
           });
         } else {
-          logPassed(eventId, eventName);
+          logPassed(eventId, eventName, eventData);
           if (validLogEntries.length > 0) {
             console.log('Valid events found:', validLogEntries);
             logEventsToBigquery(validLogEntries);

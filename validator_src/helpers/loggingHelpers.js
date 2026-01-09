@@ -2,8 +2,8 @@
 const errorLogEntries = [];
 const validLogEntries = [];
 const validFieldsEntries = [];
-const logPayloadFlag = process.env.LOG_PAYLOAD_TO_BQ;
-
+const logPayloadWhenErrorFlag = process.env.LOG_PAYLOAD_WHEN_ERROR;
+const logPayloadWhenValidFlag = process.env.LOG_PAYLOAD_WHEN_VALID;
 function logError(field, type, expected, actual, eventName, eventData, eventId) {
     errorLogEntries.push({
         event_name: eventName,
@@ -15,21 +15,22 @@ function logError(field, type, expected, actual, eventName, eventData, eventId) 
         timestamp: new Date().toISOString(),
         status: 'error',
         date_utc: new Date().toISOString().split('T')[0],
-        event_data: logPayloadFlag === "true" ? JSON.stringify(eventData) : null
+        event_data: logPayloadWhenErrorFlag === "true" ? JSON.stringify(eventData) : null
     });
 }
 
-function logPassed(eventId, eventName) {
+function logPassed(eventId, eventName, eventData) {
     validLogEntries.push({
         event_name: eventName,
         event_id: eventId,
         timestamp: new Date().toISOString(),
         status: 'valid',
-        date_utc: new Date().toISOString().split('T')[0]
+        date_utc: new Date().toISOString().split('T')[0],
+        event_data: logPayloadWhenValidFlag === "true" ? JSON.stringify(eventData) : null
     });
 }
 
-function logValidField(field, value, status, logValidFieldsFlag, eventId, eventName) {
+function logValidField(field, value, status, logValidFieldsFlag, eventId, eventName, eventData) {
     if (logValidFieldsFlag === true) { 
         validFieldsEntries.push({
             event_name: eventName,
@@ -38,7 +39,8 @@ function logValidField(field, value, status, logValidFieldsFlag, eventId, eventN
             value: JSON.stringify(value),
             timestamp: new Date().toISOString(),
             status: status,
-            date_utc: new Date().toISOString().split('T')[0]
+            date_utc: new Date().toISOString().split('T')[ 0 ],
+            event_data: logPayloadWhenValidFlag === "true" ? JSON.stringify(eventData) : null
         });
     } else return
 }

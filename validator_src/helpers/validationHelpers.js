@@ -26,7 +26,7 @@ function checkType(schemaObject, key, dataToValidate, parentPath = '', eventName
 			return;
 		}
 
-		logValidField(fieldPath, expected, 'valid', logValidFieldsFlag, eventId, eventName);
+		logValidField(fieldPath, expected, 'valid', logValidFieldsFlag, eventId, eventName, _root);
 		return;
 	}
 
@@ -46,7 +46,7 @@ function checkType(schemaObject, key, dataToValidate, parentPath = '', eventName
 			});
 			return;
 		}
-		logValidField(fieldPath, expected, 'valid', logValidFieldsFlag, eventId);
+		logValidField(fieldPath, expected, 'valid', logValidFieldsFlag, eventId, eventName, _root);
 		return;
 	}
 
@@ -62,14 +62,14 @@ function checkType(schemaObject, key, dataToValidate, parentPath = '', eventName
 			checkWithSchema(schemaObject[key].nestedSchema, val, fieldPath, eventName, eventId, _root);
 			return;
 		}
-		logValidField(fieldPath, expected, 'valid', logValidFieldsFlag, eventId);
+		logValidField(fieldPath, expected, 'valid', logValidFieldsFlag, eventId, eventName, _root);
 		return;
 	}
 
 	if (actual !== expected) {
 		logError(fieldPath, 'type', expected, actual, eventName, _root, eventId);
 	} else {
-		logValidField(fieldPath, expected, 'valid', logValidFieldsFlag, eventId, eventName);
+		logValidField(fieldPath, expected, 'valid', logValidFieldsFlag, eventId, eventName, _root);
 	}
 }
 
