@@ -14,6 +14,7 @@ A scalable, serverless solution for real-time JSON event validation on Google Cl
 *   **BigQuery Logging**: Automatically logs validation results and processing errors for auditing.
 *   **API Gateway Secured**: Protected by API Keys with automated managed service activation.
 *   **Fully Automated**: One-click deployment with built-in propagation delays for stability.
+*   **GA4 Ready**: Pre-loaded with 36 recommended GA4 event schemas and a master parameter repository.
 
 ---
 
@@ -105,7 +106,8 @@ The `streamlit_ev/` application provides a "Parameter Repository" approach to sc
 If you deployed using the steps above, Terraform has already:
 1.  Created a dedicated `streamlit-worker` Service Account.
 2.  Granted it `Storage Object Admin` permissions on the schema bucket.
-3.  Generated `streamlit_ev/.env` with your project and bucket details.
+3.  **Pre-loaded GA4 Data**: Uploaded 36 recommended GA4 schemas and the master `repo.json`.
+4.  Generated `streamlit_ev/.env` with your project and bucket details.
 
 ### Local Start
 1.  **Authenticate**: `gcloud auth application-default login`
