@@ -17,15 +17,26 @@ from helpers.gcp import uploadJson, readRepoFromJson
 # RENDER READ-ONLY FIELD (NORMAL)
 
 def render_schema_param(field_id, field):
-
     cols = st.columns([3, 2, 3, 1])
 
-    cols[0].text_input(
-        "Field",
-        field.get("key", ""),
-        disabled=True,
-        key=f"schema_key_{field_id}",
-    )
+    # Compare with Repo default
+    repo = st.session_state.get("repo", {})
+    param_name = field.get("key", "")
+    repo_default = repo.get(param_name, {}).get("value", "")
+    
+    # Robust comparison (0.0 vs 0)
+    current_val = field.get("value", "")
+    
+    def values_match(v1, v2, p_type):
+        if p_type == "number":
+            try: return float(v1) == float(v2)
+            except: return str(v1) == str(v2)
+        return str(v1) == str(v2)
+
+    is_overridden = not values_match(current_val, repo_default, field.get("type")) and param_name in repo
+
+    label = f"Field {'⚖️' if is_overridden else ''}"
+    cols[0].text_input(label, param_name, disabled=True, key=f"schema_key_{field_id}")
 
     cols[1].text_input(
         "Type",
@@ -34,17 +45,45 @@ def render_schema_param(field_id, field):
         key=f"schema_type_{field_id}",
     )
 
-    if field.get("type") != "array":
-        cols[2].text_input(
-            "Value",
-            str(field.get("value", "")),
-            disabled=True,
-            key=f"schema_value_{field_id}",
-        )
-    else:
+    if field.get("type") == "array":
         cols[2].markdown("—")
+    elif field.get("type") == "boolean":
+        opts = ["true", "false", "Any"]
+        curr_idx = opts.index(str(current_val).lower()) if str(current_val).lower() in opts else 2
+        new_val = cols[2].selectbox("Value", opts, index=curr_idx, key=f"schema_value_{field_id}")
+        if new_val != str(current_val):
+            field["value"] = new_val
+            st.session_state.schema[field_id] = field
+    elif field.get("type") == "number":
+        # Use text_input to allow empty values for numbers
+        new_val = cols[2].text_input("Value (number)", value=str(current_val) if current_val is not None else "", key=f"schema_value_{field_id}")
+        if new_val != str(current_val):
+            # Validate it's a number or empty
+            if new_val.strip() == "":
+                field["value"] = ""
+            else:
+                try: 
+                    float(new_val)
+                    field["value"] = new_val
+                except ValueError:
+                    st.error("Invalid number")
+            st.session_state.schema[field_id] = field
+    else:
+        new_val = cols[2].text_input("Value", str(current_val), key=f"schema_value_{field_id}")
+        if new_val != str(current_val):
+            field["value"] = new_val
+            st.session_state.schema[field_id] = field
 
-    if cols[3].button("❌", key=f"schema_delete_{field_id}"):
+    # Actions: Reset and Delete
+    act_cols = cols[3].columns([1, 1])
+    if is_overridden:
+        if act_cols[0].button("🔄", key=f"schema_reset_{field_id}", help="Reset to Repo default"):
+            field["value"] = repo_default
+            st.session_state.schema[field_id] = field
+            st.toast(f"Reset '{param_name}' to default.")
+            st.rerun()
+    
+    if act_cols[1].button("❌", key=f"schema_delete_{field_id}"):
         delete_field_and_rerun(field_id)
 
     st.markdown("---")
@@ -72,27 +111,49 @@ def render_array_param(field_id, field):
     st.markdown("#### Nested fields:")
 
     nested = field.get("nestedSchema", {}) or {}
-    for nid, nf in sorted(nested.items()):
-        cols = st.columns([3, 2, 3])
+    # Compare nested with Repo
+    repo = st.session_state.get("repo", {})
+    array_name = field.get("key", "")
+    repo_nested = repo.get(array_name, {}).get("nestedSchema", {})
 
-        cols[0].text_input(
-            "Key",
-            nf.get("key", ""),
-            disabled=True,
-            key=f"arr_nested_key_{field_id}_{nid}",
-        )
-        cols[1].text_input(
-            "Type",
-            nf.get("type", ""),
-            disabled=True,
-            key=f"arr_nested_type_{field_id}_{nid}",
-        )
-        cols[2].text_input(
-            "Value",
-            str(nf.get("value", "")),
-            disabled=True,
-            key=f"arr_nested_value_{field_id}_{nid}",
-        )
+    for nid, nf in sorted(nested.items()):
+        cols = st.columns([3, 2, 3, 1])
+        n_key = nf.get("key", "")
+        
+        # Check override for nested
+        r_nf = repo_nested.get(n_key, {})
+        r_val = r_nf.get("value", "")
+        is_n_overridden = str(nf.get("value", "")) != str(r_val) and n_key in repo_nested
+
+        label = f"Key {'⚖️' if is_n_overridden else ''}"
+        cols[0].text_input(label, n_key, disabled=True, key=f"arr_nested_key_{field_id}_{nid}")
+
+        cols[1].text_input("Type", nf.get("type", ""), disabled=True, key=f"arr_nested_type_{field_id}_{nid}")
+        
+        # Type-specific nested values
+        if nf.get("type") == "boolean":
+            opts = ["true", "false", "Any"]
+            c_val = str(nf.get("value", "")).lower()
+            c_idx = opts.index(c_val) if c_val in opts else 2
+            new_n_val = cols[2].selectbox("Value", opts, index=c_idx, key=f"arr_nested_value_{field_id}_{nid}")
+        elif nf.get("type") == "number":
+            new_n_val = cols[2].text_input("Value (number)", value=str(nf.get("value", "")) if nf.get("value") is not None else "", key=f"arr_nested_value_{field_id}_{nid}")
+            if str(new_n_val) != str(nf.get("value", "")):
+                if new_n_val.strip() == "":
+                    nf["value"] = ""
+                else:
+                    try:
+                        float(new_n_val)
+                        nf["value"] = new_n_val
+                    except ValueError:
+                        st.error("Invalid number")
+                st.session_state.schema[field_id]["nestedSchema"][nid] = nf
+
+        if is_n_overridden:
+            if cols[3].button("🔄", key=f"arr_nested_reset_{field_id}_{nid}", help="Reset to Repo default"):
+                nf["value"] = r_val
+                st.session_state.schema[field_id]["nestedSchema"][nid] = nf
+                st.rerun()
     st.markdown("---")
 # MAIN BUILDER UI
 def render_builder():

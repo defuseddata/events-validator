@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import json
 import os
 import streamlit as st
+from concurrent.futures import ThreadPoolExecutor
 load_dotenv()
 
 bucket_name = os.getenv("BUCKET_NAME")
@@ -109,6 +110,16 @@ def readSchemaToJson(schema_name):
     except Exception as e:
         print(f"Error reading schema {schema_name}: {e}")
         return {}
+
+def read_schemas_parallel(schema_names):
+    """
+    Reads multiple schemas in parallel using ThreadPoolExecutor.
+    Returns a dict { schema_name: schema_data }.
+    """
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        results = list(executor.map(readSchemaToJson, schema_names))
+    
+    return dict(zip(schema_names, results))
 
 def readRepoFromJson():
     bucket = get_bucket()

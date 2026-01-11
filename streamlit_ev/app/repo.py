@@ -3,9 +3,17 @@ import pandas as pd
 import streamlit as st
 import json
 import os
-from helpers.gcp import readRepoFromJson, writeRepoToJson
+import copy
+from helpers.gcp import readRepoFromJson, writeRepoToJson, read_schemas_parallel
 from helpers.helpers import render_field_row, pretty_schema_inline
-from helpers.updater import find_impacted_schemas, rebuild_schema_dry_run, apply_updates, render_diff_ui, render_diff_ui
+from helpers.updater import (
+    find_impacted_schemas, 
+    apply_updates, 
+    render_diff_ui, 
+    construct_schema_definition,
+    update_schema_full,
+    check_schema_health
+)
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -64,7 +72,6 @@ def render_repo():
     # repo_data = readRepoFromJson()
     # st.session_state.repo = repo_data
     # available_categories = sorted({param.get("category", "Uncategorized") for param in st.session_state.repo.values()})
-    print(get_available_categories())
 
     # CHECK FOR PENDING CONFIRMATION (To avoid nested dialogs)
     if "pending_confirmation" in st.session_state:
@@ -96,11 +103,10 @@ def render_repo():
                 cols = st.columns([2,2])
 
                 table = pd.DataFrame([
-                    ["Type", param.get("type", "")],
-                    ["Value", param.get("value", "")],
-                    ["Regex", param.get("regex", "")],
-                    ["Category", param.get("category", "")],
-                    ["Description", param.get("description", "")],
+                    ["Type", str(param.get("type", ""))],
+                    ["Default Value", str(param.get("value", ""))],
+                    ["Category", str(param.get("category", ""))],
+                    ["Description", str(param.get("description", ""))],
                     ["Used In", json.dumps(param.get("usedInSchemas", ""))],
                 ], columns=["Field", "Value"])
 
@@ -152,6 +158,34 @@ def addParamToRepo(param):
     st.session_state.repo = repo
     st.session_state.toast_message = f"Parameter '{param}' added to repository."
 
+def sync_explorer_cache(updated_schemas_map=None):
+    """
+    Granularly updates the session-bounded Explorer cache after a repo change.
+    - If schemas were updated on GCP, we update their cached JSON content.
+    - We re-run health checks on all cached schemas against the new repo state.
+    """
+    if "explorer_cache" not in st.session_state:
+        return
+    
+    cache = st.session_state.explorer_cache
+    repo = st.session_state.get("repo", {})
+    
+    # 1. Update cached schema contents if we just modified them
+    if updated_schemas_map:
+        for s_name, data_container in updated_schemas_map.items():
+            # data_container is usually {"original":..., "new":...}
+            new_content = data_container.get("new", data_container)
+            if s_name in cache["schemas"]:
+                cache["schemas"][s_name] = new_content
+
+    # 2. Re-run health checks on ALL cached schemas (Fast local operation)
+    new_health = {}
+    for f, content in cache["schemas"].items():
+        new_health[f] = check_schema_health(content, repo)
+    
+    cache["health"] = new_health
+    st.session_state.explorer_cache = cache
+
 
 def next_id_for_repo():
     repo = st.session_state.get("repo", {})
@@ -197,6 +231,46 @@ def delete_nested_edit(param_name, nid):
         del st.session_state[key][nid]
 
 
+    name = cols[0].text_input("Parameter name", key=f"repo_key_{param_id}")
+    type_val = cols[1].selectbox(
+        "Type",
+        typeOptions,
+        key=f"repo_type_{param_id}"
+    )
+    # Category selection
+    category = cols[2].selectbox(
+        "Category",
+        get_available_categories(),
+        key=f"repo_cat_{param_id}",
+        accept_new_options=True,
+        placeholder="choose or fill in new category"
+    )
+
+    # If user selects Custom → show text input
+    # if category == "Custom":
+    #     custom_value = cols[2].text_input(
+    #         "Custom category",
+    #         placeholder="Enter custom category name",
+    #         key=f"custom_cat_{param_id}"
+    #     )
+    #     category = custom_value or "Custom"
+
+    value = None
+    if type_val == "boolean":
+        value = cols[3].selectbox("Default Value", key=f"repo_val_{param_id}", options=["true", "false", "Any"])
+    elif type_val == "number":
+        value = cols[3].text_input("Default Value (number)", key=f"repo_val_{param_id}", placeholder="e.g. 1.0 or leave empty")
+    elif type_val != "array":
+        value = cols[3].text_input("Default Value", key=f"repo_val_{param_id}")
+    else:
+        st.info(f"Now You are creating an Array parameter: {name or 'no name'}. Add nested fields below:")
+
+
+    description = cols[4].text_area(
+        "Description",
+        key=f"repo_desc_{param_id}",
+        placeholder="Describe what this parameter means, how it's used, constraints, notes…"
+    )
 
 def add_bulk_param():
     if "bulk_params" not in st.session_state:
@@ -406,6 +480,14 @@ def confirm_update_dialog(full_schema_map, param_name):
     
     st.warning(f"Parameter '{param_name}' is used in {len(full_schema_map)} deployed schema(s).")
     st.markdown("Select which schemas to update:")
+
+    # MASTER TOGGLE
+    def toggle_all():
+        b_val = st.session_state.master_toggle_schemas
+        for s_name in full_schema_map.keys():
+            st.session_state[f"chk_{s_name}"] = b_val
+
+    st.checkbox("Select / Deselect all schemas", value=True, key="master_toggle_schemas", on_change=toggle_all)
     
     # Selection State initialization
     selected_schemas = []
@@ -416,22 +498,32 @@ def confirm_update_dialog(full_schema_map, param_name):
         # Use a container to group checkbox and expander
         c1, c2 = st.columns([0.1, 0.9])
         with c1:
-            # unique key for checkbox
-            # We assume all check by default.
-            is_checked = st.checkbox("Select Schema", value=True, key=f"chk_{schema_name}", label_visibility="collapsed")
+            # use master toggle as default if state not set
+            def_val = st.session_state.get("master_toggle_schemas", True)
+            is_checked = st.checkbox("Select Schema", value=def_val, key=f"chk_{schema_name}", label_visibility="collapsed")
             if is_checked:
                 selected_schemas.append(schema_name)
         with c2:
             with st.expander(f"Review: {schema_name}", expanded=False):
                 render_diff_ui(data["original"], data["new"], param_name)
     
+    # ---------------------------------------------------------
+    # CLEANUP HELPER
+    def cleanup_confirmation():
+        if "pending_confirmation" in st.session_state:
+            del st.session_state.pending_confirmation
+        if "master_toggle_schemas" in st.session_state:
+            del st.session_state.master_toggle_schemas
+        for k in list(st.session_state.keys()):
+            if k.startswith("chk_"):
+                del st.session_state[k]
+
     st.markdown("---")
     col1, col2 = st.columns([1,1])
     
     with col1:
         if st.button("Cancel"):
-            if "pending_confirmation" in st.session_state:
-                del st.session_state.pending_confirmation
+            cleanup_confirmation()
             st.rerun()
             
     with col2:
@@ -447,8 +539,6 @@ def confirm_update_dialog(full_schema_map, param_name):
                     st.error(f"Schema Update Errors: {errors}")
                 
             # 2. Update Local Repo (Atomic Commit)
-            # regardless of schema success? Ideally yes, because the user INTENDED to change the param.
-            # Even if 1 schema failed, we likely want the repo updated.
             if draft_data:
                 st.session_state.repo[param_name] = draft_data
                 writeRepoToJson(st.session_state.repo)
@@ -457,9 +547,10 @@ def confirm_update_dialog(full_schema_map, param_name):
             if success_count > 0:
                 st.success(f"Updated {success_count} schema(s) successfully!")
             
-            if "pending_confirmation" in st.session_state:
-                del st.session_state.pending_confirmation
-                
+            # GRANULAR CACHED SYNC 🧠
+            sync_explorer_cache(updates_only)
+            
+            cleanup_confirmation()
             time.sleep(2)
             st.rerun()
 
@@ -569,6 +660,14 @@ def edit_param_dialog(param_name):
         placeholder="Describe what this parameter means, how it's used, constraints, notes…"
     )
     
+    # TYPE CHANGE RESET LOGIC
+    if new_type != current_type:
+        st.info(f"💡 Type changed from `{current_type}` to `{new_type}`. Default value will be reset to a safe type-compliant placeholder upon saving.")
+        if new_type == "number": new_value = 0
+        elif new_type == "boolean": new_value = "Any"
+        elif new_type == "array": new_value = None
+        else: new_value = ""
+
     if st.button("Save"):
         draft_param_data = st.session_state.repo[param_name].copy()
         draft_param_data["type"] = new_type
@@ -617,11 +716,21 @@ def edit_param_dialog(param_name):
         
         full_schema_map = {}
         if impacted_schemas:
-            for schema_name in impacted_schemas:
-                full_name = schema_name if schema_name.endswith(".json") else f"{schema_name}.json"
-                orig_data, new_schema_data = rebuild_schema_dry_run(full_name, param_name, draft_param_data)
+            full_names = [s if s.endswith(".json") else f"{s}.json" for s in impacted_schemas]
+            
+            with st.spinner(f"Preparing updates for {len(full_names)} schemas..."):
+                # PARALLEL FETCH ALL IMPACTED 🚀
+                original_contents = read_schemas_parallel(full_names)
                 
-                if new_schema_data:
+                # PROCESS LOCALLY (INSTANT)
+                new_props = construct_schema_definition(draft_param_data)
+                for full_name, orig_data in original_contents.items():
+                    if not orig_data: continue
+                    
+                    new_schema_data = copy.deepcopy(orig_data)
+                    if param_name in new_schema_data:
+                        new_schema_data[param_name] = new_props
+                        
                     full_schema_map[full_name] = {
                         "original": orig_data,
                         "new": new_schema_data
@@ -640,6 +749,10 @@ def edit_param_dialog(param_name):
             st.session_state.repo[param_name] = draft_param_data
             writeRepoToJson(st.session_state.repo)
             st.toast(f"Parameter '{param_name}' updated.")
+            
+            # GRANULAR CACHE SYNC (No schemas updated, but health might be affected) 🧠
+            sync_explorer_cache()
+            
             if nested_state_key in st.session_state:
                 del st.session_state[nested_state_key]
             st.rerun()
