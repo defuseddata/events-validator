@@ -1,6 +1,0 @@
-streamlit
-streamlit-option-menu
-pandas
-google-cloud-storage
-python-dotenv
-reportlab
