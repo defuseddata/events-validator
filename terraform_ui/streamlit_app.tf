@@ -24,7 +24,7 @@ resource "google_cloud_run_v2_service" "streamlit_ui" {
       }
       env {
         name  = "BUCKET_NAME"
-        value = google_storage_bucket.eventvalidator_schemas_bucket.name
+        value = var.schemas_bucket
       }
       env {
         name  = "GCP_PROJECT"
@@ -33,6 +33,14 @@ resource "google_cloud_run_v2_service" "streamlit_ui" {
       env {
         name  = "REPO_JSON_FILE"
         value = "repo.json"
+      }
+      env {
+        name  = "BQ_DATASET"
+        value = var.bq_dataset
+      }
+      env {
+        name  = "BQ_TABLE"
+        value = var.bq_table
       }
     }
   }
@@ -60,7 +68,7 @@ resource "google_compute_backend_service" "streamlit_backend" {
   name        = "streamlit-backend-service"
   protocol    = "HTTPS"
   load_balancing_scheme = "EXTERNAL_MANAGED"
-  
+
   backend {
     group = google_compute_region_network_endpoint_group.streamlit_neg.id
   }

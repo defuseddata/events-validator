@@ -1,0 +1,14 @@
+project_id       = "your-project-id"
+region           = "europe-west1"
+credentials_file = "credentials.json"
+
+# Backend Integration (get these values from terraform_backend outputs)
+schemas_bucket = "event_validator_schemas_bucket-XXXXXXXX"
+bq_dataset     = "event_data_dataset"
+bq_table       = "event_data_table"
+
+# IAP Configuration
+iap_client_id     = "YOUR_CLIENT_ID"
+iap_client_secret = "YOUR_CLIENT_SECRET"
+authorized_users  = ["user:you@example.com"]
+streamlit_image_tag = "latest"

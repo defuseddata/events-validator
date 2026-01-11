@@ -1,37 +1,32 @@
 variable "project_id" {
   description = "The ID of the project in which to create the resources."
   type        = string
-  
 }
 
 variable "region" {
   description = "The region in which to create the resources."
   type        = string
-  
 }
-variable "credentials_file" { 
+
+variable "credentials_file" {
   description = "The name of the credentials file."
   type        = string
-  
 }
 
 variable "function_source_dir" {
   description = "The source directory for the cloud function."
   type        = string
-  
 }
 
 variable "location" {
   description = "The location for resources."
   type        = string
-  
 }
 
 variable "bq_schema_file" {
   description = "BigQuery schema file path"
-  type    = string
+  type        = string
 }
-
 
 variable "LOG_PAYLOAD_WHEN_ERROR_FLAG" {
   description = "Do you want to log payload when validation fails? (true/false)"
@@ -43,15 +38,14 @@ variable "LOG_PAYLOAD_WHEN_VALID_FLAG" {
   type        = bool
 }
 
- variable "LOG_VALID_FIELDS_FLAG" {
+variable "LOG_VALID_FIELDS_FLAG" {
   description = "Do you want to log valid fields into bigquery? (true/false)"
   type        = bool
- }
+}
 
 variable "EVENT_DATA_PATH" {
   description = "Path to event data in request"
   type        = string
-  
 }
 
 variable "EVENT_NAME_ATTRIBUTE" {
@@ -70,30 +64,3 @@ variable "force_destroy_buckets" {
   type        = bool
   default     = false
 }
-
-# --- IAP & Cloud Run Variables ---
-
-variable "iap_client_id" {
-  description = "OAuth 2.0 Client ID for IAP"
-  type        = string
-  sensitive   = true
-}
-
-variable "iap_client_secret" {
-  description = "OAuth 2.0 Client Secret for IAP"
-  type        = string
-  sensitive   = true
-}
-
-variable "authorized_users" {
-  description = "List of emails (users/groups) authorized to access the UI via IAP"
-  type        = list(string)
-  default     = []
-}
-
-variable "streamlit_image_tag" {
-  description = "The tag of the image to deploy for the Streamlit UI"
-  type        = string
-  default     = "latest"
-}
-

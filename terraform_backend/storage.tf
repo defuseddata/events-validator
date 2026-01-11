@@ -6,7 +6,7 @@ resource "google_storage_bucket" "eventvalidatorfunction_bucket" {
   name     = "event_validator_function_source_bucket-${random_id.bucket_suffix.hex}"
   location = var.location
   provider = google
-  
+
 }
 
 resource "google_storage_bucket" "eventvalidator_schemas_bucket" {
@@ -14,7 +14,7 @@ resource "google_storage_bucket" "eventvalidator_schemas_bucket" {
   location = var.location
   provider = google
   force_destroy = var.force_destroy_buckets
-  
+
 }
 
 resource "google_storage_bucket_object" "eventvalidatorfunction_object" {
@@ -42,4 +42,3 @@ resource "google_storage_bucket_object" "ga4_repo_json" {
   bucket = google_storage_bucket.eventvalidator_schemas_bucket.name
   source = "${path.module}/src/GA4 Recommended/repo.json"
 }
-

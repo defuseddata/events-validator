@@ -1,5 +1,3 @@
-
-
 resource "archive_file" "function_zip" {
   type        = "zip"
   source_dir  = "${path.module}/${var.function_source_dir}"
@@ -13,7 +11,7 @@ resource "google_cloudfunctions2_function" "function" {
 
   build_config {
     runtime = "nodejs20"
-    entry_point = "validateEvent" 
+    entry_point = "validateEvent"
 
     source {
       storage_source {
@@ -38,6 +36,6 @@ resource "google_cloudfunctions2_function" "function" {
       LOG_VALID_FIELDS = var.LOG_VALID_FIELDS_FLAG
       LOG_PAYLOAD_WHEN_ERROR = var.LOG_PAYLOAD_WHEN_ERROR_FLAG
       LOG_PAYLOAD_WHEN_VALID = var.LOG_PAYLOAD_WHEN_VALID_FLAG
-    } 
+    }
   }
 }
