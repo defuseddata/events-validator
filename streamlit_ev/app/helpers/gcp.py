@@ -1,4 +1,4 @@
-from google.cloud import storage
+from google.cloud import storage, bigquery
 from google.oauth2 import service_account
 from dotenv import load_dotenv
 import json
@@ -12,7 +12,7 @@ credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 repo_file_name = os.getenv("REPO_JSON_FILE") or "repo.json"
 
 _bucket_ref = None
-
+_bq_client = None
 
 
 def get_bucket():
@@ -39,6 +39,24 @@ def get_bucket():
         return None
         
     return _bucket_ref
+
+def get_bq_client():
+    global _bq_client
+    if _bq_client:
+        return _bq_client
+
+    try:
+        creds_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if creds_env and not os.path.exists(creds_env):
+            del os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
+
+        _bq_client = bigquery.Client(project=project)
+    except Exception as e:
+        st.error(f"BigQuery Init Error: {e}")
+        print(f"Warning: Could not initialize BigQuery client: {e}")
+        return None
+        
+    return _bq_client
 
 def uploadJson(data, destination_blob_name, silent=False):
     bucket = get_bucket()

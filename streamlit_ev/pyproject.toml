@@ -6,9 +6,14 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "google-cloud-storage>=3.7.0",
+    "google-cloud-bigquery>=3.7.0",
     "pandas>=2.3.3",
     "python-dotenv>=1.2.1",
     "reportlab>=4.4.7",
     "streamlit>=1.52.2",
     "streamlit-option-menu>=0.4.0",
+    "db-dtypes>=1.5.0",
+    "altair>=6.0.0",
+    "polars>=1.37.0",
+    "pyarrow>=22.0.0",
 ]

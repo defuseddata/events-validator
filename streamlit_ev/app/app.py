@@ -6,6 +6,7 @@ from explorer import render_explorer
 from repo import render_repo
 from home import render_home
 from export import render_exporter
+from validation_report import render_validation_report
 import time
 from dotenv import load_dotenv
 load_dotenv()
@@ -23,8 +24,8 @@ st.session_state.setdefault("schema_version", int(0))
 with st.container():
     selected = option_menu(
         None,
-        ["Home", "Explorer", "Builder", "Params Repo", "Export"],
-        icons=["house", "list", "tools", "book", "file-earmark-arrow-up"],
+        ["Home", "Explorer", "Builder", "Params Repo", "Export", "Validation Report"],
+        icons=["house", "list", "tools", "book", "file-earmark-arrow-up", "activity"],
         orientation="horizontal",
         styles={
             "container": {"padding": "0!important", "margin": "0", "width": "100%"},
@@ -48,6 +49,8 @@ try:
         render_repo()
     elif st.session_state.page == "home":
         render_home()
+    elif st.session_state.page == "validation report":
+        render_validation_report()
 
 except Exception as e:
     import traceback
