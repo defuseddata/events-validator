@@ -17,9 +17,3 @@ LOG_PAYLOAD_WHEN_VALID_FLAG = false
 # Deletion Safeguards (Recommended for production)
 deletion_protection   = true
 force_destroy_buckets = false
-
-# IAP Configuration
-iap_client_id     = "YOUR_CLIENT_ID"
-iap_client_secret = "YOUR_CLIENT_SECRET"
-authorized_users  = ["user:you@example.com"]
-streamlit_image_tag = "latest"

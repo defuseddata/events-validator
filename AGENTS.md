@@ -49,16 +49,15 @@ events-validator/
 │   ├── Dockerfile            # Multi-stage container build
 │   └── pyproject.toml        # Python dependencies (uv)
 │
-├── terraform_ev/              # Infrastructure as Code
-│   ├── main.tf               # GCP service activation
-│   ├── variables.tf          # Configuration variables (100 lines)
-│   ├── cloudfunction.tf      # Cloud Functions deployment
-│   ├── gateway.tf            # API Gateway configuration
+├── terraform_backend/         # Backend Infrastructure (Validator + Data)
+│   ├── main.tf               # GCP service activation (backend services)
+│   ├── setup.tf              # Provider configuration
+│   ├── variables.tf          # Backend configuration variables
+│   ├── outputs.tf            # Backend outputs (bucket, API Gateway, etc.)
 │   ├── storage.tf            # GCS buckets & schema uploads
 │   ├── bigquery.tf           # BigQuery dataset & tables
-│   ├── streamlit_app.tf      # Cloud Run & Load Balancer
-│   ├── streamlit_sa.tf       # Service accounts & IAM
-│   ├── outputs.tf            # Terraform outputs
+│   ├── cloudfunction.tf      # Cloud Functions deployment
+│   ├── gateway.tf            # API Gateway configuration
 │   └── src/
 │       ├── templates/
 │       │   └── gateway_config_template.yaml.tpl  # OpenAPI spec
@@ -69,6 +68,14 @@ events-validator/
 │       │   └── repo.json              # GA4 parameter repository
 │       └── test_schemas/
 │           └── example.json
+│
+├── terraform_ui/              # UI Infrastructure (Streamlit + IAP)
+│   ├── main.tf               # GCP service activation (UI services)
+│   ├── setup.tf              # Provider configuration
+│   ├── variables.tf          # UI configuration variables
+│   ├── outputs.tf            # UI outputs (URL, build command)
+│   ├── streamlit_app.tf      # Cloud Run & Load Balancer
+│   └── streamlit_sa.tf       # Service accounts & IAM
 │
 └── README.md                  # Main documentation
 ```
@@ -186,38 +193,55 @@ events-validator/
 - Preview changes before committing
 - Rollback capabilities
 
-### Terraform Infrastructure
+### Terraform Infrastructure (Split into Backend + UI)
 
-**[terraform_ev/variables.tf](terraform_ev/variables.tf)** (100 lines)
+#### Backend Infrastructure (terraform_backend/)
+
+**[terraform_backend/variables.tf](terraform_backend/variables.tf)**
 - Project configuration variables
 - Logging flags: `LOG_VALID_FIELDS_FLAG`, `LOG_PAYLOAD_WHEN_ERROR_FLAG`, etc.
 - Event structure: `EVENT_NAME_ATTRIBUTE`, `EVENT_DATA_PATH`
-- OAuth credentials for IAP
 
-**[terraform_ev/cloudfunction.tf](terraform_ev/cloudfunction.tf)** (43 lines)
+**[terraform_backend/cloudfunction.tf](terraform_backend/cloudfunction.tf)**
 - Cloud Function resource definition
 - Environment variable injection
 - Function source deployment from GCS
 
-**[terraform_ev/gateway.tf](terraform_ev/gateway.tf)** (95 lines)
+**[terraform_backend/gateway.tf](terraform_backend/gateway.tf)**
 - API Gateway configuration
 - OpenAPI spec generation from template
 - API key creation and management
 
-**[terraform_ev/storage.tf](terraform_ev/storage.tf)** (46 lines)
+**[terraform_backend/storage.tf](terraform_backend/storage.tf)**
 - GCS bucket creation
 - Uploads GA4 schemas and repo.json
 - Function source code upload
 
-**[terraform_ev/bigquery.tf](terraform_ev/bigquery.tf)** (16 lines)
+**[terraform_backend/bigquery.tf](terraform_backend/bigquery.tf)**
 - BigQuery dataset creation
 - Validation logs table with schema from JSON
 
-**[terraform_ev/streamlit_app.tf](terraform_ev/streamlit_app.tf)** (80+ lines)
+**[terraform_backend/outputs.tf](terraform_backend/outputs.tf)**
+- Exports `schemas_bucket`, `bq_dataset`, `bq_table` for UI project
+- Exports `api_gateway_url` and `api_key` for testing
+
+#### UI Infrastructure (terraform_ui/)
+
+**[terraform_ui/variables.tf](terraform_ui/variables.tf)**
+- Project configuration variables
+- Backend integration: `schemas_bucket`, `bq_dataset`, `bq_table` (from backend outputs)
+- OAuth credentials for IAP: `iap_client_id`, `iap_client_secret`
+
+**[terraform_ui/streamlit_app.tf](terraform_ui/streamlit_app.tf)**
 - Cloud Run service deployment
 - Load Balancer configuration
 - Identity-Aware Proxy setup
 - SSL certificate management
+
+**[terraform_ui/streamlit_sa.tf](terraform_ui/streamlit_sa.tf)**
+- Service account for Streamlit worker
+- IAM bindings for GCS and BigQuery access
+- Generates local `.env` file for development
 
 ---
 
@@ -324,7 +348,7 @@ events-validator/
 ## Environment Variables
 
 ### Cloud Function Variables
-Set in [terraform_ev/cloudfunction.tf](terraform_ev/cloudfunction.tf):
+Set in [terraform_backend/cloudfunction.tf](terraform_backend/cloudfunction.tf):
 
 - `SCHEMA_BUCKET` - GCS bucket name for schemas
 - `BQ_DATASET` - BigQuery dataset ID
@@ -336,11 +360,13 @@ Set in [terraform_ev/cloudfunction.tf](terraform_ev/cloudfunction.tf):
 - `LOG_PAYLOAD_WHEN_VALID` - Attach payload on success (true/false)
 
 ### Streamlit UI Variables
-Set in [streamlit_ev/Dockerfile](streamlit_ev/Dockerfile) or Cloud Run config:
+Set in [streamlit_ev/Dockerfile](streamlit_ev/Dockerfile) or Cloud Run config (via [terraform_ui/streamlit_app.tf](terraform_ui/streamlit_app.tf)):
 
-- `BUCKET_NAME` - GCS bucket name
+- `BUCKET_NAME` - GCS bucket name (from backend output `schemas_bucket`)
 - `GCP_PROJECT` - GCP project ID
 - `REPO_JSON_FILE` - Repo filename (default: "repo.json")
+- `BQ_DATASET` - BigQuery dataset ID (from backend output)
+- `BQ_TABLE` - BigQuery table ID (from backend output)
 - `GOOGLE_APPLICATION_CREDENTIALS` - Service account key path (local dev only)
 
 ---
@@ -441,69 +467,100 @@ To add a new validation type:
 
 ### 3. Change Event Structure
 
-**Files**: [terraform_ev/variables.tf](terraform_ev/variables.tf), [terraform_ev/cloudfunction.tf](terraform_ev/cloudfunction.tf)
+**Files**: [terraform_backend/variables.tf](terraform_backend/variables.tf), [terraform_backend/cloudfunction.tf](terraform_backend/cloudfunction.tf)
 
-1. Update `EVENT_DATA_PATH` or `EVENT_NAME_ATTRIBUTE` in `variables.tf`
-2. Run `terraform apply` to update Cloud Function env vars
+1. Update `EVENT_DATA_PATH` or `EVENT_NAME_ATTRIBUTE` in `terraform_backend/variables.tf`
+2. Run `terraform apply` in `terraform_backend/` to update Cloud Function env vars
 3. Test with new event structure
 
 ### 4. Add New GCP Service
 
-**Files**: [terraform_ev/](terraform_ev/)
-
-1. Add service activation in [terraform_ev/main.tf](terraform_ev/main.tf)
+**Backend Services**: [terraform_backend/](terraform_backend/)
+1. Add service activation in [terraform_backend/main.tf](terraform_backend/main.tf)
 2. Create new `.tf` file (e.g., `pubsub.tf`)
-3. Update service account permissions in [terraform_ev/streamlit_sa.tf](terraform_ev/streamlit_sa.tf)
-4. Add outputs in [terraform_ev/outputs.tf](terraform_ev/outputs.tf)
+3. Add outputs in [terraform_backend/outputs.tf](terraform_backend/outputs.tf)
+
+**UI Services**: [terraform_ui/](terraform_ui/)
+1. Add service activation in [terraform_ui/main.tf](terraform_ui/main.tf)
+2. Update service account permissions in [terraform_ui/streamlit_sa.tf](terraform_ui/streamlit_sa.tf)
+3. Add outputs in [terraform_ui/outputs.tf](terraform_ui/outputs.tf)
 
 ### 5. Modify BigQuery Schema
 
-**Files**: [terraform_ev/src/bq_schema/bq_schema.json](terraform_ev/src/bq_schema/bq_schema.json), [terraform_ev/bigquery.tf](terraform_ev/bigquery.tf)
+**Files**: [terraform_backend/src/bq_schema/bq_schema.json](terraform_backend/src/bq_schema/bq_schema.json), [terraform_backend/bigquery.tf](terraform_backend/bigquery.tf)
 
-1. Edit JSON schema in `bq_schema.json`
-2. Update table creation in `bigquery.tf`
+1. Edit JSON schema in `terraform_backend/src/bq_schema/bq_schema.json`
+2. Update table creation in `terraform_backend/bigquery.tf`
 3. Modify logging logic in [validator_src/helpers/loggingHelpers.js](validator_src/helpers/loggingHelpers.js)
-4. Run `terraform apply` (may require table recreation)
+4. Run `terraform apply` in `terraform_backend/` (may require table recreation)
 
 ### 6. Update GA4 Schemas
 
-**Files**: [terraform_ev/src/GA4 Recommended/](terraform_ev/src/GA4%20Recommended/)
+**Files**: [terraform_backend/src/GA4 Recommended/](terraform_backend/src/GA4%20Recommended/)
 
-1. Edit schemas in `GA4 Recommended/schemas/*.json`
+1. Edit schemas in `terraform_backend/src/GA4 Recommended/schemas/*.json`
 2. Update `repo.json` if parameters change
-3. Run `terraform apply` to upload to GCS
+3. Run `terraform apply` in `terraform_backend/` to upload to GCS
 4. Use Explorer UI to verify health
 
 ---
 
 ## Deployment & Testing
 
-### Initial Deployment
+### Initial Deployment (Two-Step Process)
+
+The infrastructure is split into two independent Terraform projects:
+1. **Backend** (`terraform_backend/`): Validator function, BigQuery, GCS buckets, API Gateway
+2. **UI** (`terraform_ui/`): Streamlit Cloud Run, Load Balancer, IAP authentication
+
+#### Step 1: Deploy Backend
 
 ```bash
-cd terraform_ev
+cd terraform_backend
 
 # 1. Configure credentials
 cp terraform.tfvars.example terraform.tfvars
-# Edit with: project_id, region, credentials_file, iap_client_id, etc.
+# Edit with: project_id, region, credentials_file, logging flags, etc.
 
-# 2. Initialize Terraform
+# 2. Initialize and deploy
 terraform init
-
-# 3. Deploy all infrastructure
 terraform apply
 
-# 4. Get outputs
-terraform output api_gateway_url
-terraform output api_key
-terraform output streamlit_url
+# 3. Save outputs for UI deployment
+terraform output schemas_bucket    # Needed for terraform_ui
+terraform output bq_dataset        # Needed for terraform_ui
+terraform output bq_table          # Needed for terraform_ui
+terraform output api_gateway_url   # For testing
+terraform output api_key           # For testing
+```
+
+#### Step 2: Deploy UI (Optional)
+
+```bash
+cd terraform_ui
+
+# 1. Configure credentials
+cp terraform.tfvars.example terraform.tfvars
+# Edit with: project_id, region, schemas_bucket (from backend), IAP credentials, etc.
+
+# 2. Build and push Streamlit image first
+gcloud builds submit --tag [REGION]-docker.pkg.dev/[PROJECT_ID]/event-validator-ui-repo/event-validator-ui:latest ../streamlit_ev
+
+# 3. Initialize and deploy
+terraform init
+terraform apply
+
+# 4. Get UI URL
+terraform output streamlit_ui_url
 ```
 
 ### Testing Validator Function
 
 ```bash
+cd terraform_backend
+
 # Test with curl
-curl -X POST "$(terraform output -raw api_gateway_url)?key=$(terraform output -raw api_key)" \
+curl -X POST "https://$(terraform output -raw api_gateway_url)/eventsValidator?key=$(terraform output -raw api_key)" \
   -H "Content-Type: application/json" \
   -d '{
     "data": {
@@ -533,28 +590,40 @@ cd streamlit_ev
 # Install dependencies with uv
 uv sync
 
-# Set environment variables
+# Set environment variables (or use .env file generated by terraform_ui)
 export BUCKET_NAME="your-bucket"
 export GCP_PROJECT="your-project"
+export BQ_DATASET="event_data_dataset"
+export BQ_TABLE="event_data_table"
 export GOOGLE_APPLICATION_CREDENTIALS="path/to/key.json"
 
 # Run locally
-streamlit run app/app.py
+uv run streamlit run app/app.py
 ```
 
 ### Updating Infrastructure
 
+**Backend updates**:
 ```bash
-cd terraform_ev
-
-# Preview changes
+cd terraform_backend
 terraform plan
-
-# Apply changes
 terraform apply
+```
 
-# Destroy (careful!)
-terraform destroy
+**UI updates**:
+```bash
+cd terraform_ui
+terraform plan
+terraform apply
+```
+
+**Destroy (careful!)**:
+```bash
+# Destroy UI first (depends on backend resources)
+cd terraform_ui && terraform destroy
+
+# Then destroy backend
+cd terraform_backend && terraform destroy
 ```
 
 ---
@@ -564,19 +633,19 @@ terraform destroy
 ### Authentication & Authorization
 
 1. **API Gateway**: Protected with API keys
-   - Keys generated in [terraform_ev/gateway.tf](terraform_ev/gateway.tf)
+   - Keys generated in [terraform_backend/gateway.tf](terraform_backend/gateway.tf)
    - Passed as query parameter: `?key=<API_KEY>`
-   - Regenerate keys by running `terraform apply`
+   - Regenerate keys by running `terraform apply` in `terraform_backend/`
 
 2. **Streamlit UI**: Protected with Identity-Aware Proxy (IAP)
    - OAuth 2.0 authentication
-   - Configure in [terraform_ev/streamlit_app.tf](terraform_ev/streamlit_app.tf)
-   - Authorized users list in `terraform.tfvars`
+   - Configure in [terraform_ui/streamlit_app.tf](terraform_ui/streamlit_app.tf)
+   - Authorized users list in `terraform_ui/terraform.tfvars`
 
 3. **Service Accounts**: Minimal IAM permissions
    - Cloud Function SA: read GCS, write BigQuery
    - Cloud Run SA: read/write GCS, read BigQuery
-   - Defined in [terraform_ev/streamlit_sa.tf](terraform_ev/streamlit_sa.tf)
+   - Defined in [terraform_ui/streamlit_sa.tf](terraform_ui/streamlit_sa.tf)
 
 ### Best Practices
 
@@ -760,8 +829,9 @@ A  terraform_ev/credentials.json  # Should be removed before commit!
 - **Core Validation Logic**: [validator_src/helpers/validationHelpers.js:50](validator_src/helpers/validationHelpers.js#L50)
 - **Schema Upload**: [streamlit_ev/app/builder.py:200](streamlit_ev/app/builder.py#L200)
 - **Parameter Repository**: [streamlit_ev/app/repo.py](streamlit_ev/app/repo.py)
-- **Terraform Variables**: [terraform_ev/variables.tf](terraform_ev/variables.tf)
-- **GA4 Schemas**: [terraform_ev/src/GA4 Recommended/schemas/](terraform_ev/src/GA4%20Recommended/schemas/)
+- **Backend Terraform Variables**: [terraform_backend/variables.tf](terraform_backend/variables.tf)
+- **UI Terraform Variables**: [terraform_ui/variables.tf](terraform_ui/variables.tf)
+- **GA4 Schemas**: [terraform_backend/src/GA4 Recommended/schemas/](terraform_backend/src/GA4%20Recommended/schemas/)
 
 ### Key Functions
 - `validateEvent()` - [validator_src/helpers/validationHelpers.js:30](validator_src/helpers/validationHelpers.js#L30)

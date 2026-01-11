@@ -1,6 +1,6 @@
 resource "google_api_gateway_api" "gateway" {
     api_id = "my-api"
-    display_name = "api-gateway" 
+    display_name = "api-gateway"
     provider = google-beta
     depends_on = [
         google_project_service.required_services["cloudfunctions.googleapis.com"]
@@ -67,7 +67,7 @@ resource "google_api_gateway_api_config" "api_cfg" {
       contents = base64encode( local.rendered_openapi)
     }
   }
-  
+
   lifecycle {
     create_before_destroy = true
   }

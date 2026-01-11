@@ -22,12 +22,12 @@ output "schemas_bucket" {
     depends_on = [ google_storage_bucket.eventvalidator_schemas_bucket ]
 }
 
-output "streamlit_ui_url" {
-  description = "The public URL of the Streamlit UI"
-  value       = "https://${google_compute_global_address.streamlit_lb_ip.address}.sslip.io"
+output "bq_dataset" {
+    description = "The BigQuery dataset ID"
+    value = google_bigquery_dataset.event_validator_dataset.dataset_id
 }
 
-output "streamlit_build_command" {
-  description = "The exact gcloud command to build and push the UI image"
-  value       = "gcloud builds submit --tag ${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.streamlit_repo.repository_id}/event-validator-ui:${var.streamlit_image_tag} ./streamlit_ev"
+output "bq_table" {
+    description = "The BigQuery table ID"
+    value = google_bigquery_table.event_validator_data_table.table_id
 }

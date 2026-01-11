@@ -39,7 +39,8 @@ graph TD
 ## 📁 Project Structure
 
 - **`validator_src/`**: Node.js source code for the Cloud Function.
-- **`terraform_ev/`**: Infrastructure as Code (Terraform) to deploy the Function, BigQuery, Storage, and API Gateway.
+- **`terraform_backend/`**: Infrastructure as Code (Terraform) for backend services - Cloud Function, BigQuery, GCS buckets, API Gateway.
+- **`terraform_ui/`**: Infrastructure as Code (Terraform) for UI services - Streamlit Cloud Run, Load Balancer, IAP authentication.
 - **`streamlit_ev/`**: (Optional) UI for schema management and parameter building.
 
 ## 🚀 Key Features
@@ -91,7 +92,7 @@ Running this setup on GCP is designed to be cost-effective for validation worklo
 *   *Note*: Costs may vary based on exact payload size and region.
 
 ### 📊 Granular Logging Control
-Configure these flags in `terraform_ev/terraform.tfvars` to balance visibility with storage costs:
+Configure these flags in `terraform_backend/terraform.tfvars` to balance visibility with storage costs:
 
 | Flag | Description |
 | :--- | :--- |
@@ -123,7 +124,7 @@ You need a **Deployer Service Account** to run Terraform. **Never commit the `.j
         *   `Project IAM Admin` (To grant permissions to the worker account)
         *   `Service Usage Admin` (To enable APIs automatically)
     *   `Service Account User` (Always required for Terraform to deploy resources)
-3.  Generate a JSON key and save it as `terraform_ev/credentials.json`.
+3.  Generate a JSON key and save it as `terraform_backend/credentials.json` (and `terraform_ui/credentials.json` if deploying UI).
 
 ---
 
@@ -133,8 +134,10 @@ To achieve a "Zero-Touch" experience, Terraform manages most configuration files
 
 | File | Component | Owned By | Description |
 | :--- | :--- | :--- | :--- |
-| `terraform_ev/credentials.json` | Infra | **User** | Deployer Service Account key (Manual). |
-| `terraform_ev/terraform.tfvars` | Infra | **User** | Project configuration (Manual). |
+| `terraform_backend/credentials.json` | Backend | **User** | Deployer Service Account key (Manual). |
+| `terraform_backend/terraform.tfvars` | Backend | **User** | Backend project configuration (Manual). |
+| `terraform_ui/credentials.json` | UI | **User** | Deployer Service Account key (Manual). |
+| `terraform_ui/terraform.tfvars` | UI | **User** | UI project configuration (Manual). |
 | `streamlit_ev/.env` | UI | **Terraform** | App config: Bucket, Project, etc. |
 
 > [!IMPORTANT]
@@ -144,18 +147,48 @@ To achieve a "Zero-Touch" experience, Terraform manages most configuration files
 
 ## 🚀 Deployment (Terraform)
 
-1.  **Initialize**:
-    ```bash
-    cd terraform_ev
-    cp terraform.tfvars.example terraform.tfvars
-    ```
-2.  **Configure**: Edit `terraform.tfvars` with your `project_id`, `region`, `location`, and the IAP credentials you created in the prerequisites.
-3.  **Deploy**:
-    ```bash
-    terraform init
-    terraform apply
-    ```
-    *(Note: The deployment includes a 60s delay to allow Google's API Gateway to propagate.)*
+The infrastructure is split into two independent projects for flexibility:
+
+> [!IMPORTANT]
+> Before running `terraform apply`, you **must** create your own `terraform.tfvars` file from the provided example in each project directory. The `.tfvars` files contain sensitive configuration and are not committed to the repository.
+
+### Step 1: Deploy Backend (Required)
+
+```bash
+cd terraform_backend
+
+# Create your configuration file from the example
+cp terraform.tfvars.example terraform.tfvars
+
+# Edit terraform.tfvars with your project_id, region, location, and logging flags
+# IMPORTANT: Update all placeholder values before proceeding
+
+terraform init
+terraform apply
+```
+*(Note: The deployment includes a 60s delay to allow Google's API Gateway to propagate.)*
+
+**Save the outputs** - you'll need them for the UI deployment:
+```bash
+terraform output schemas_bucket
+terraform output bq_dataset
+terraform output bq_table
+```
+
+### Step 2: Deploy UI (Optional)
+
+```bash
+cd terraform_ui
+
+# Create your configuration file from the example
+cp terraform.tfvars.example terraform.tfvars
+
+# Edit terraform.tfvars with your project_id, region, schemas_bucket (from backend), and IAP credentials
+# IMPORTANT: Update all placeholder values, including the schemas_bucket from Step 1 outputs
+
+terraform init
+terraform apply
+```
 
 ---
 
@@ -163,6 +196,7 @@ To achieve a "Zero-Touch" experience, Terraform manages most configuration files
 
 1.  **Get Endpoint Details**:
     ```bash
+    cd terraform_backend
     terraform output api_gateway_url
     terraform output api_key
     ```
@@ -186,11 +220,15 @@ To achieve a "Zero-Touch" experience, Terraform manages most configuration files
 The `streamlit_ev/` application provides a "Parameter Repository" approach to schema management.
 
 ### Keyless Setup
-If you deployed using the steps above, Terraform has already:
-1.  Created a dedicated `streamlit-worker` Service Account.
-2.  Granted it `Storage Object Admin` permissions on the schema bucket.
-3.  **Pre-loaded GA4 Data**: Uploaded 36 recommended GA4 schemas and the master `repo.json`.
-4.  Generated `streamlit_ev/.env` with your project and bucket details.
+If you deployed using the steps above:
+- **Backend** (`terraform_backend`) has:
+  1.  Created the schema bucket and pre-loaded 36 GA4 schemas and `repo.json`.
+  2.  Created the BigQuery dataset and table for validation logs.
+- **UI** (`terraform_ui`) has:
+  1.  Created a dedicated `streamlit-worker` Service Account.
+  2.  Granted it `Storage Object Admin` permissions on the schema bucket.
+  3.  Granted it `BigQuery Data Viewer` and `Job User` permissions for reading logs.
+  4.  Generated `streamlit_ev/.env` with your project, bucket, and BigQuery details.
 
 ### Local Start
 1.  **Authenticate**: `gcloud auth application-default login`
@@ -220,7 +258,7 @@ Before deploying to the cloud, you **must** configure the following using Google
     ```
 2.  **Terraform Apply**:
     ```bash
-    cd terraform_ev
+    cd terraform_ui
     terraform apply
     ```
 
