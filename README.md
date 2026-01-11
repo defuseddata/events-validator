@@ -1,6 +1,6 @@
 # Events Validator (Core)
 
-A scalable, serverless solution for real-time JSON event validation on Google Cloud Platform. 
+A scalable, serverless solution for real-time JSON event validation on Google Cloud Platform. It allows anyone to easily validate the quality of any in-app event data (e.g., coming from server-side Google Tag Manager) before it hits your analytics or marketing destinations.
 
 ## 🏗️ Architecture
 
@@ -50,6 +50,45 @@ graph TD
 *   **API Gateway Secured**: Protected by API Keys with automated managed service activation.
 *   **Fully Automated**: One-click deployment with built-in propagation delays for stability.
 *   **GA4 Ready**: Pre-loaded with 36 recommended GA4 event schemas and a master parameter repository.
+
+## 🏷️ Sample GTM Setup
+
+To validate data from Server-Side Google Tag Manager (sGTM), send the entire Event Data object to the validator function, eg. using the **"JSON HTTP Request"** tag (e.g., the popular template by stape.io) following the following steps:
+
+1.  **Tag Type**: Use the **JSON HTTP Request** tag.
+2.  **Destination URL**: Set to your `https://<API_GATEWAY_URL>/eventsValidator?key=<API_KEY>`.
+3.  **Body**: Select the "Include in the body all Event Data" option.
+4.  **Triggering**: It is **highly recommended** to sample incoming data based on volume to manage costs.
+    *   *Option*: Use a specific Trigger in GTM to select only certain event types (e.g., `purchase`, `sign_up`) or validation-prone events.
+
+## 📋 Event Schema & Validation
+
+The validator expects a JSON body with a `data` object containing the event details.
+
+### Expected Format
+```json
+{
+  "data": {
+    "event_name": "your_event_name",
+    "param_1": "value_1",
+    "param_2": 123
+  }
+}
+```
+
+### Supported Features
+*   **Structure Validation**: Ensures required parameters are present.
+*   **Type Checking**: Validates data types (string, number, boolean, etc.).
+*   **Value Constraints**: (Optional) specific allowed values or regex patterns defined in your GCS schemas.
+*   **Unknown Parameters**: Flags parameters not defined in the schema (configurable).
+
+## 💰 Cost Estimation
+
+Running this setup on GCP is designed to be cost-effective for validation workloads.
+
+*   **Approximate Cost**: ~$0.50 per day for ~50,000 processed events.
+*   *Includes*: Cloud Functions invocations, Cloud Storage class A/B operations, and minimal BigQuery streaming ingestion.
+*   *Note*: Costs may vary based on exact payload size and region.
 
 ### 📊 Granular Logging Control
 Configure these flags in `terraform_ev/terraform.tfvars` to balance visibility with storage costs:
@@ -156,14 +195,19 @@ If you deployed using the steps above, Terraform has already:
 ### Local Start
 1.  **Authenticate**: `gcloud auth application-default login`
 2.  `cd streamlit_ev`
-3.  `python3 -m venv venv && source venv/bin/activate`
-4.  `pip install -r requirements.txt`
-5.  `streamlit run app/app.py`
+3.  **Install Dependencies**:
+    ```bash
+    uv sync
+    ```
+4.  **Run**:
+    ```bash
+    uv run streamlit run app/app.py
+    ```
 
 ### Production Deployment (Cloud Run + IAP)
 
 #### 1. Manual Prerequisites
-Before deploying to the cloud, you **must**:
+Before deploying to the cloud, you **must** configure the following using Google Cloud Console:
 1.  **OAuth Consent Screen**: Set to "Internal" and add `iap.googleapis.com` scope.
 2.  **OAuth Client ID**: Create a "Web Internal" ID and add this Redirect URI:
     `https://iap.googleapis.com/v1/oauth/clientIds/YOUR_CLIENT_ID:handleRedirect`
@@ -187,3 +231,15 @@ Before deploying to the cloud, you **must**:
 - **Overridable Values**: Assign specific values in the Builder while staying synced with Repo metadata.
 - **Empty vs Zero Support**: Robust handling of numeric fields—set fields to "empty" (null) instead of forcing 0.0.
 - **Explorer**: Direct visibility and health-check analysis for your GCS schema bucket.
+- **Auto-Sync**: Propagate changes from the Repo to all GCS schemas with one click.
+- **Health Checks**: Automatically detect when GCS schemas are out of sync with your repository.
+- **Explorer**: Direct visibility into your GCS schema bucket.
+
+---
+
+## 📄 License & Maintainers
+
+*   **License**: This project is licensed under the **GNU General Public License (GPL)**. It is free to use, fork, and modify.
+*   **Contributions**: We encourage contributions! Please fork the repository and submit pull requests.
+*   **Roadmap**: View the public roadmap at [github.com/orgs/defuseddata/projects/1](https://github.com/orgs/defuseddata/projects/1).
+*   **Maintainer**: Maintained by [Defused Data](https://defuseddata.com).

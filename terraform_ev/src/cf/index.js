@@ -5,7 +5,7 @@ exports.helloget = async (req, res) => {
 
   // log
   console.log("Body:", req.body);
-  console.log("test czy sie zmienia kod na cloudzie");
+
   // response
   res.status(200).send("OK");
 };

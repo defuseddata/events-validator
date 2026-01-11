@@ -1,5 +1,8 @@
 FROM python:3.11-slim
 
+# Copy uv from the official image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 WORKDIR /app
 
 # Install system dependencies (curl for healthcheck)
@@ -7,8 +10,16 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy uv configuration files
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies using uv
+# --frozen: use uv.lock
+# --no-dev: do not install dev dependencies
+RUN uv sync --frozen --no-dev
+
+# Place the virtual environment in the PATH
+ENV PATH="/app/.venv/bin:$PATH"
 
 COPY . .
 
