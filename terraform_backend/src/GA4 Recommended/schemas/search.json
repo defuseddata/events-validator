@@ -1,0 +1,16 @@
+{
+  "event_name": {
+    "type": "string",
+    "value": "search",
+    "description": ""
+  },
+  "version": {
+    "type": "number",
+    "value": 1,
+    "description": ""
+  },
+  "search_term": {
+    "type": "string",
+    "description": "The term that was searched for."
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "event_name": {
+    "type": "string",
+    "value": "join_group",
+    "description": ""
+  },
+  "version": {
+    "type": "number",
+    "value": 1,
+    "description": ""
+  },
+  "group_id": {
+    "type": "string",
+    "description": "The ID of the group."
+  }
+}

@@ -1,0 +1,674 @@
+{
+  "currency": {
+    "type": "string",
+    "description": "Currency of the items associated with the event, in 3-letter ISO 4217 format. Value metrics on the view_item event to not contribute to revenue * If you set value then currency is required for revenue metrics to be computed accurately.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "close_convert_lead",
+      "close_unconvert_lead",
+      "disqualify_lead",
+      "generate_lead",
+      "purchase",
+      "qualify_lead",
+      "refund",
+      "remove_from_cart",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "working_lead"
+    ]
+  },
+  "value": {
+    "type": "number",
+    "description": "The monetary value of the event. * Set value to the sum of (price * quantity) for all items in items. Don't include shipping or tax. * value is typically required for meaningful reporting. If you mark the event as a key event then it's recommended you set value. * currency is required if you set value.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "close_convert_lead",
+      "close_unconvert_lead",
+      "disqualify_lead",
+      "earn_virtual_currency",
+      "generate_lead",
+      "purchase",
+      "qualify_lead",
+      "refund",
+      "remove_from_cart",
+      "spend_virtual_currency",
+      "view_cart",
+      "view_item",
+      "working_lead"
+    ]
+  },
+  "coupon": {
+    "type": "string",
+    "description": "The coupon name/code associated with the event. Event-level and item-level coupon parameters are independent.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "payment_type": {
+    "type": "string",
+    "description": "The chosen method of payment.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info"
+    ]
+  },
+  "items": {
+    "type": "array",
+    "description": "The items for the event.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "item_id": {
+    "type": "string",
+    "description": "The ID of the item. *One of item_id or item_name is required.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "share",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "item_name": {
+    "type": "string",
+    "description": "The name of the item. *One of item_id or item_name is required.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "spend_virtual_currency",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "affiliation": {
+    "type": "string",
+    "description": "A product affiliation to designate a supplying company or brick and mortar store location. Note: `affiliation` is only available at the item-scope.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "discount": {
+    "type": "number",
+    "description": "The unit monetary discount value associated with the item.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "index": {
+    "type": "number",
+    "description": "The index/position of the item in a list.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "item_brand": {
+    "type": "string",
+    "description": "The brand of the item.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "item_category": {
+    "type": "string",
+    "description": "The category of the item. If used as part of a category hierarchy or taxonomy then this will be the first category.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "item_category2": {
+    "type": "string",
+    "description": "The second category hierarchy or additional taxonomy for the item.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "item_category3": {
+    "type": "string",
+    "description": "The third category hierarchy or additional taxonomy for the item.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "item_category4": {
+    "type": "string",
+    "description": "The fourth category hierarchy or additional taxonomy for the item.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "item_category5": {
+    "type": "string",
+    "description": "The fifth category hierarchy or additional taxonomy for the item.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "item_list_id": {
+    "type": "string",
+    "description": "The ID of the list in which the item was presented to the user. If set, event-level item_list_id is ignored. If not set, event-level item_list_id is used, if present.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "item_list_name": {
+    "type": "string",
+    "description": "The name of the list in which the item was presented to the user. If set, event-level item_list_name is ignored. If not set, event-level item_list_name is used, if present.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "item_variant": {
+    "type": "string",
+    "description": "The item variant or unique code or description for additional item details/options.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "location_id": {
+    "type": "string",
+    "description": "The physical location associated with the item (e.g. the physical store location). It's recommended to use the Google Place ID that corresponds to the associated item. A custom location ID can also be used. Note: `location id` is only available at the item-scope.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "price": {
+    "type": "number",
+    "description": "The monetary unit price of the item, in units of the specified currency parameter. If a discount applies to the item, set price to the discounted unit price and specify the unit price discount in the discount parameter.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "quantity": {
+    "type": "number",
+    "description": "Item quantity. If not set, quantity is set to 1.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_payment_info",
+      "add_shipping_info",
+      "add_to_cart",
+      "add_to_wishlist",
+      "begin_checkout",
+      "purchase",
+      "refund",
+      "remove_from_cart",
+      "select_item",
+      "select_promotion",
+      "view_cart",
+      "view_item",
+      "view_item_list",
+      "view_promotion"
+    ]
+  },
+  "shipping_tier": {
+    "type": "string",
+    "description": "The shipping tier (e.g. Ground, Air, Next-day) selected for delivery of the purchased item.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "add_shipping_info"
+    ]
+  },
+  "unconvert_lead_reason": {
+    "type": "string",
+    "description": "The reason the lead was unconverted.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "close_unconvert_lead"
+    ]
+  },
+  "disqualified_lead_reason": {
+    "type": "string",
+    "description": "The reason a lead was marked as disqualified.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "disqualify_lead"
+    ]
+  },
+  "virtual_currency_name": {
+    "type": "string",
+    "description": "The name of the virtual currency.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "earn_virtual_currency",
+      "spend_virtual_currency"
+    ]
+  },
+  "lead_source": {
+    "type": "string",
+    "description": "The source of the lead.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "generate_lead"
+    ]
+  },
+  "group_id": {
+    "type": "string",
+    "description": "The ID of the group.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "join_group"
+    ]
+  },
+  "level_name": {
+    "type": "string",
+    "description": "The name of the level.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "level_end",
+      "level_start"
+    ]
+  },
+  "success": {
+    "type": "boolean",
+    "description": "Set to true if the level was completed successfully.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "level_end"
+    ]
+  },
+  "level": {
+    "type": "number",
+    "description": "The level of the character.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "level_up",
+      "post_score"
+    ]
+  },
+  "character": {
+    "type": "string",
+    "description": "The character that leveled up.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "level_up",
+      "post_score"
+    ]
+  },
+  "method": {
+    "type": "string",
+    "description": "The method used to login.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "login",
+      "share",
+      "sign_up"
+    ]
+  },
+  "score": {
+    "type": "number",
+    "description": "The score to post.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "post_score"
+    ]
+  },
+  "customer_type": {
+    "type": "string",
+    "description": "Is the conversion from a `new` or `returning` customer? new: New customer who hasn't purchased within a given time period (540-day window recommended and set at default, but not required). returning: A returning customer who has purchased during the given time period. Don't specify a value if there's uncertainty (for example, if the user checked out as a guest).",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "purchase"
+    ]
+  },
+  "transaction_id": {
+    "type": "string",
+    "description": "The unique identifier of a transaction. The transaction_id parameter helps you avoid getting duplicate events for a purchase.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "purchase",
+      "refund"
+    ]
+  },
+  "shipping": {
+    "type": "number",
+    "description": "Shipping cost associated with a transaction.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "purchase",
+      "refund"
+    ]
+  },
+  "tax": {
+    "type": "number",
+    "description": "Tax cost associated with a transaction.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "purchase",
+      "refund"
+    ]
+  },
+  "search_term": {
+    "type": "string",
+    "description": "The term that was searched for.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "search"
+    ]
+  },
+  "content_type": {
+    "type": "string",
+    "description": "The type of selected content.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "select_content",
+      "share"
+    ]
+  },
+  "content_id": {
+    "type": "string",
+    "description": "An identifier for the content that was selected.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "select_content"
+    ]
+  },
+  "creative_name": {
+    "type": "string",
+    "description": "The name of the promotional creative. Ignored if set at the item-level.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "select_promotion",
+      "view_promotion"
+    ]
+  },
+  "creative_slot": {
+    "type": "string",
+    "description": "The name of the promotional creative slot associated with the event. Ignored if set at the item-level.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "select_promotion",
+      "view_promotion"
+    ]
+  },
+  "promotion_id": {
+    "type": "string",
+    "description": "The ID of the promotion associated with the event. Ignored if set at the item-level.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "select_promotion",
+      "view_promotion"
+    ]
+  },
+  "promotion_name": {
+    "type": "string",
+    "description": "The name of the promotion associated with the event. Ignored if set at the item-level.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "select_promotion",
+      "view_promotion"
+    ]
+  },
+  "achievement_id": {
+    "type": "string",
+    "description": "The id of the achievement that was unlocked.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "unlock_achievement"
+    ]
+  },
+  "lead_status": {
+    "type": "string",
+    "description": "The status of the lead.",
+    "category": "GA4 Recommended",
+    "usedInSchemas": [
+      "working_lead"
+    ]
+  }
+}

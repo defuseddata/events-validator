@@ -1,0 +1,20 @@
+{
+  "event_name": {
+    "type": "string",
+    "value": "earn_virtual_currency",
+    "description": ""
+  },
+  "version": {
+    "type": "number",
+    "value": 1,
+    "description": ""
+  },
+  "virtual_currency_name": {
+    "type": "string",
+    "description": "The name of the virtual currency."
+  },
+  "value": {
+    "type": "number",
+    "description": "The value of the virtual currency."
+  }
+}

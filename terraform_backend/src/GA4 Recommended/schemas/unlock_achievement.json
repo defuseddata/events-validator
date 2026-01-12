@@ -1,0 +1,16 @@
+{
+  "event_name": {
+    "type": "string",
+    "value": "unlock_achievement",
+    "description": ""
+  },
+  "version": {
+    "type": "number",
+    "value": 1,
+    "description": ""
+  },
+  "achievement_id": {
+    "type": "string",
+    "description": "The id of the achievement that was unlocked."
+  }
+}
