@@ -117,12 +117,17 @@ You need a **Deployer Service Account** to run Terraform. **Never commit the `.j
 1.  Create a Service Account in the [IAM Console](https://console.cloud.google.com/iam-admin/serviceaccounts).
 2.  **Assign Roles**:
     *   `Editor` (Fastest for testing) **OR** the following specific roles:
-        *   `Cloud Functions Admin` & `Cloud Run Admin` (For the validator function)
-        *   `API Gateway Admin` & `Service Management Administrator` (For the entry point)
-        *   `BigQuery Admin` & `Storage Admin` (For logs and schemas)
-        *   `Service Account Admin` (To create user identities)
-        *   `Project IAM Admin` (To grant permissions to the worker account)
-        *   `Service Usage Admin` (To enable APIs automatically)
+        *   `API Keys Admin` (For Gateway security)
+        *   `ApiGateway Admin` (For the entry point)
+        *   `Artifact Registry Administrator` (For UI images)
+        *   `BigQuery Admin` (For logs)
+        *   `Cloud Functions Admin` & `Cloud Run Admin` (For the validator function and UI)
+        *   `Compute Admin` (For Load Balancer and Global IPs)
+        *   `IAP Policy Admin` & `IAP Settings Admin` (For UI authentication)
+        *   `Project IAM Admin` (To grant permissions to worker accounts)
+        *   `Service Account Admin` & `Service Account Key Admin` (To manage identities)
+        *   `Service Management Administrator` & `Service Usage Admin` (To enable APIs automatically)
+        *   `Storage Admin` (For logs and schemas)
     *   `Service Account User` (Always required for Terraform to deploy resources)
 3.  Generate a JSON key and save it as `terraform_backend/credentials.json` (and `terraform_ui/credentials.json` if deploying UI).
 

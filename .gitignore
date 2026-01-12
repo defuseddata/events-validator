@@ -21,7 +21,7 @@ venv/
 .venv/
 .streamlit/
 
-# --- Testy / cache ---
+# --- Tests / cache ---
 .pytest_cache/
 .mypy_cache/
 .cache/
