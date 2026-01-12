@@ -1,0 +1,20 @@
+{
+  "event_name": {
+    "type": "string",
+    "value": "select_content",
+    "description": ""
+  },
+  "version": {
+    "type": "number",
+    "value": 1,
+    "description": ""
+  },
+  "content_type": {
+    "type": "string",
+    "description": "The type of selected content."
+  },
+  "content_id": {
+    "type": "string",
+    "description": "An identifier for the content that was selected."
+  }
+}

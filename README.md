@@ -246,10 +246,15 @@ If you deployed using the steps above:
 
 #### 1. Manual Prerequisites
 Before deploying to the cloud, you **must** configure the following using Google Cloud Console:
-1.  **OAuth Consent Screen**: Set to "Internal" and add `iap.googleapis.com` scope.
-2.  **OAuth Client ID**: Create a "Web Internal" ID and add this Redirect URI:
-    `https://iap.googleapis.com/v1/oauth/clientIds/YOUR_CLIENT_ID:handleRedirect`
-3.  **Update Vars**: Add `iap_client_id`, `iap_client_secret`, and `authorized_users` to your `terraform.tfvars`.
+1.  **[OAuth Consent Screen](https://console.cloud.google.com/apis/credentials/consent)**: Set to "Internal" and add `iap.googleapis.com` scope.
+2.  **[OAuth Client ID](https://console.cloud.google.com/apis/credentials)**: Create a "Web application" ID and add this **Authorized redirect URI**:
+    `https://iap.googleapis.com/v1/oauth/clientIds/YOUR_CLIENT_ID:handleRedirect` (Replace `YOUR_CLIENT_ID` with the actual ID).
+3.  **Update Config**: Add `iap_client_id`, `iap_client_secret`, and the list of `authorized_users` to your **`terraform_ui/terraform.tfvars`** file.
+
+> [!TIP]
+> **User Identity Format**: In the `authorized_users` list (within `terraform.tfvars`), ensure you use the proper prefix:
+> - Individual: `user:name@example.com`
+> - Group: `group:marketing@example.com`
 
 #### 2. Build and Deploy
 1.  **Build Image**:

@@ -1,0 +1,20 @@
+{
+  "event_name": {
+    "type": "string",
+    "value": "level_up",
+    "description": ""
+  },
+  "version": {
+    "type": "number",
+    "value": 1,
+    "description": ""
+  },
+  "level": {
+    "type": "number",
+    "description": "The level of the character."
+  },
+  "character": {
+    "type": "string",
+    "description": "The character that leveled up."
+  }
+}

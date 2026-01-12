@@ -1,0 +1,24 @@
+{
+  "event_name": {
+    "type": "string",
+    "value": "generate_lead",
+    "description": ""
+  },
+  "version": {
+    "type": "number",
+    "value": 1,
+    "description": ""
+  },
+  "currency": {
+    "type": "string",
+    "description": "Currency of the value of the event, in 3-letter ISO 4217 format. * If you set value then currency is required for revenue metrics to be computed accurately."
+  },
+  "value": {
+    "type": "number",
+    "description": "The monetary value of the event. * value is typically required for meaningful reporting. If you mark the event as a key event then it's recommended you set value. * currency is required if you set value."
+  },
+  "lead_source": {
+    "type": "string",
+    "description": "The source of the lead."
+  }
+}

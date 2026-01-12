@@ -34,8 +34,10 @@ venv/
 !validator_src/package.json
 !validator_src/package-lock.json
 !example_req_body.json
-!terraform_ev/src/bq_schema/*.json
-!terraform_ev/src/test_schemas/*.json
+!terraform_backend/src/bq_schema/*.json
+!terraform_backend/src/GA4 Recommended/**/*.json
+!terraform_backend/src/templates/*.tpl
+!terraform_ui/terraform.tfvars.example
 
 
 # --- Terraform ---

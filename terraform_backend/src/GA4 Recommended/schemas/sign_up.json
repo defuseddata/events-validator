@@ -1,0 +1,16 @@
+{
+  "event_name": {
+    "type": "string",
+    "value": "sign_up",
+    "description": ""
+  },
+  "version": {
+    "type": "number",
+    "value": 1,
+    "description": ""
+  },
+  "method": {
+    "type": "string",
+    "description": "The method used for sign up."
+  }
+}

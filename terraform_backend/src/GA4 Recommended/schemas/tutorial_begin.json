@@ -1,0 +1,12 @@
+{
+  "event_name": {
+    "type": "string",
+    "value": "tutorial_begin",
+    "description": ""
+  },
+  "version": {
+    "type": "number",
+    "value": 1,
+    "description": ""
+  }
+}

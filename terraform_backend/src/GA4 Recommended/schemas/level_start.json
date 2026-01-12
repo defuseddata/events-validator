@@ -1,0 +1,16 @@
+{
+  "event_name": {
+    "type": "string",
+    "value": "level_start",
+    "description": ""
+  },
+  "version": {
+    "type": "number",
+    "value": 1,
+    "description": ""
+  },
+  "level_name": {
+    "type": "string",
+    "description": "The name of the level."
+  }
+}
