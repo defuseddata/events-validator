@@ -1,7 +1,7 @@
 import streamlit as st
 import json
 
-from helpers.gcp import writeRepoToJson
+from helpers.storage import write_repo
 
 # Toggle expanders
 def toggle_expand_schema():
@@ -365,7 +365,7 @@ def add_schema_name_to_param_in_repo(param_name, schema_name):
         param["usedInSchemas"].append(schema_name)
 
 
-    writeRepoToJson(repo)
+    write_repo(repo, commit_message="Update schema usage tracking")
 
 
 
@@ -394,7 +394,7 @@ def update_repo_with_schema_usage(schema_name, schema_export_data):
     
     if updated:
         st.session_state.repo = repo
-        writeRepoToJson(repo)
+        write_repo(repo, commit_message="Update schema usage tracking")
 def readSchemaAndSetState(schema_data):
     internal = convert_export_to_internal(schema_data)
     st.session_state.schema = internal

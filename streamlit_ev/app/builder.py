@@ -11,7 +11,15 @@ from helpers.helpers import (
     pretty_schema_inline,
     update_repo_with_schema_usage
 )
-from helpers.gcp import uploadJson, readRepoFromJson
+from helpers.storage import (
+    read_repo,
+    write_schema,
+    write_repo,
+    is_github_mode,
+    get_current_branch,
+    clear_cache,
+)
+from helpers.components import render_branch_selector, render_storage_status
 
 
 # RENDER READ-ONLY FIELD (NORMAL)
@@ -23,19 +31,21 @@ def render_schema_param(field_id, field):
     repo = st.session_state.get("repo", {})
     param_name = field.get("key", "")
     repo_default = repo.get(param_name, {}).get("value", "")
-    
+
     # Robust comparison (0.0 vs 0)
     current_val = field.get("value", "")
-    
+
     def values_match(v1, v2, p_type):
         if p_type == "number":
-            try: return float(v1) == float(v2)
-            except: return str(v1) == str(v2)
+            try:
+                return float(v1) == float(v2)
+            except:
+                return str(v1) == str(v2)
         return str(v1) == str(v2)
 
     is_overridden = not values_match(current_val, repo_default, field.get("type")) and param_name in repo
 
-    label = f"Field {'⚖️' if is_overridden else ''}"
+    label = f"Field {'[override]' if is_overridden else ''}"
     cols[0].text_input(label, param_name, disabled=True, key=f"schema_key_{field_id}")
 
     cols[1].text_input(
@@ -62,7 +72,7 @@ def render_schema_param(field_id, field):
             if new_val.strip() == "":
                 field["value"] = ""
             else:
-                try: 
+                try:
                     float(new_val)
                     field["value"] = new_val
                 except ValueError:
@@ -77,16 +87,18 @@ def render_schema_param(field_id, field):
     # Actions: Reset and Delete
     act_cols = cols[3].columns([1, 1])
     if is_overridden:
-        if act_cols[0].button("🔄", key=f"schema_reset_{field_id}", help="Reset to Repo default"):
+        if act_cols[0].button("Reset", key=f"schema_reset_{field_id}", help="Reset to Repo default"):
             field["value"] = repo_default
             st.session_state.schema[field_id] = field
             st.toast(f"Reset '{param_name}' to default.")
             st.rerun()
-    
-    if act_cols[1].button("❌", key=f"schema_delete_{field_id}"):
+
+    if act_cols[1].button("X", key=f"schema_delete_{field_id}"):
         delete_field_and_rerun(field_id)
 
     st.markdown("---")
+
+
 # RENDER READ-ONLY ARRAY FIELD
 def render_array_param(field_id, field):
     top = st.columns([5, 1, 1])
@@ -95,12 +107,12 @@ def render_array_param(field_id, field):
         exp_key = f"array_expanded_{field_id}"
         st.session_state.setdefault(exp_key, True)
     # Toggle
-    if top[1].button("🔼" if st.session_state[exp_key] else "🔽", key=f"toggle_arr_{field_id}"):
+    if top[1].button("Toggle" if st.session_state[exp_key] else "Expand", key=f"toggle_arr_{field_id}"):
         st.session_state[exp_key] = not st.session_state[exp_key]
         st.rerun()
 
     # Delete
-    if top[2].button("❌", key=f"delete_arr_{field_id}"):
+    if top[2].button("X", key=f"delete_arr_{field_id}"):
         delete_field_and_rerun(field_id)
         st.stop()
 
@@ -119,17 +131,17 @@ def render_array_param(field_id, field):
     for nid, nf in sorted(nested.items()):
         cols = st.columns([3, 2, 3, 1])
         n_key = nf.get("key", "")
-        
+
         # Check override for nested
         r_nf = repo_nested.get(n_key, {})
         r_val = r_nf.get("value", "")
         is_n_overridden = str(nf.get("value", "")) != str(r_val) and n_key in repo_nested
 
-        label = f"Key {'⚖️' if is_n_overridden else ''}"
+        label = f"Key {'[override]' if is_n_overridden else ''}"
         cols[0].text_input(label, n_key, disabled=True, key=f"arr_nested_key_{field_id}_{nid}")
 
         cols[1].text_input("Type", nf.get("type", ""), disabled=True, key=f"arr_nested_type_{field_id}_{nid}")
-        
+
         # Type-specific nested values
         if nf.get("type") == "boolean":
             opts = ["true", "false", "Any"]
@@ -150,21 +162,31 @@ def render_array_param(field_id, field):
                 st.session_state.schema[field_id]["nestedSchema"][nid] = nf
 
         if is_n_overridden:
-            if cols[3].button("🔄", key=f"arr_nested_reset_{field_id}_{nid}", help="Reset to Repo default"):
+            if cols[3].button("Reset", key=f"arr_nested_reset_{field_id}_{nid}", help="Reset to Repo default"):
                 nf["value"] = r_val
                 st.session_state.schema[field_id]["nestedSchema"][nid] = nf
                 st.rerun()
     st.markdown("---")
+
+
 # MAIN BUILDER UI
 def render_builder():
     st.title("Schema Builder")
 
+    # Branch selector for GitHub mode
+    if is_github_mode():
+        col_branch, col_status = st.columns([2, 3])
+        with col_branch:
+            render_branch_selector(key="builder_branch", compact=True)
+        with col_status:
+            render_storage_status()
+
     st.session_state.setdefault("expanded_schema", True)
     st.session_state.setdefault("expanded_schema_builder", True)
 
-    # Load repo
+    # Load repo from storage (GitHub or GCS)
     try:
-        repo = readRepoFromJson() or {}
+        repo = read_repo() or {}
     except Exception as e:
         repo = {}
         st.error(f"Failed to load parameters repo: {e}")
@@ -233,12 +255,12 @@ def render_builder():
 
     selected = st.selectbox("Choose parameter", available, key="choose_param")
 
-    if st.button("➕ Add selected parameter", key="add_param_btn"):
+    if st.button("Add selected parameter", key="add_param_btn"):
         new_id = next_id_for_schema()
         internal = convert_repo_param_to_internal(selected, repo[selected])
-        
+
         add_schema_name_to_param_in_repo(selected, st.session_state.event_name)
-        
+
         schema[new_id] = internal
 
         st.session_state.schema = schema
@@ -257,7 +279,7 @@ def render_builder():
 
         with top[1]:
             st.button(
-                "🔼 Collapse fields" if st.session_state.expanded_schema_builder else "🔽 Expand fields",
+                "Collapse fields" if st.session_state.expanded_schema_builder else "Expand fields",
                 key="collapse_builder",
                 on_click=toggle_expand_schema_builder,
             )
@@ -274,10 +296,8 @@ def render_builder():
 
     # RIGHT — JSON PREVIEW
     with right:
-
-
         export = export_schema()
-        
+
         compact = st.toggle("Compact schema view", value=True)
 
         if compact:
@@ -285,20 +305,46 @@ def render_builder():
         else:
             st.json(export)
 
+        def handle_save(data, filename, event_name):
+            """Save schema to storage (GitHub or GCS)."""
+            # Write schema
+            commit_msg = f"Update schema: {event_name}"
+            success, message = write_schema(filename, data, commit_message=commit_msg)
 
-        def handle_gcp_upload(data, filename, event_name):
-            uploadJson(data, filename)
-            if st.session_state.get("upload_status"):
+            if success:
+                st.session_state.upload_status = True
+                # Update repo with schema usage
                 update_repo_with_schema_usage(event_name, data)
+                # Clear cache to refresh explorer
+                clear_cache()
+            else:
+                st.session_state.upload_status = False
+                st.session_state.upload_error = message
 
         if st.session_state.event_name.strip():
+            # Determine button label based on storage mode
+            if is_github_mode():
+                current_branch = get_current_branch()
+                btn_label = f"Save to GitHub ({current_branch})"
+            else:
+                btn_label = "Save to GCS"
+
             st.button(
-                "Send to GCP",
-                on_click=handle_gcp_upload,
+                btn_label,
+                on_click=handle_save,
                 args=(export, f"{st.session_state.event_name}.json", st.session_state.event_name),
                 type="primary",
                 key="send_gcp_btn",
             )
+
+            # Show result
+            if st.session_state.get("upload_status") is True:
+                st.success("Schema saved successfully!")
+                del st.session_state.upload_status
+            elif st.session_state.get("upload_status") is False:
+                st.error(f"Save failed: {st.session_state.get('upload_error', 'Unknown error')}")
+                del st.session_state.upload_status
+                st.session_state.pop("upload_error", None)
         else:
             st.error("Event name is required")
 

@@ -4,12 +4,20 @@ import streamlit as st
 import json
 import os
 import copy
-from helpers.gcp import readRepoFromJson, writeRepoToJson, read_schemas_parallel
+from helpers.storage import (
+    read_repo,
+    write_repo,
+    read_schemas_parallel,
+    is_github_mode,
+    get_current_branch,
+    clear_cache,
+)
+from helpers.components import render_branch_selector, render_storage_status
 from helpers.helpers import render_field_row, pretty_schema_inline
 from helpers.updater import (
-    find_impacted_schemas, 
-    apply_updates, 
-    render_diff_ui, 
+    find_impacted_schemas,
+    apply_updates,
+    render_diff_ui,
     construct_schema_definition,
     update_schema_full,
     check_schema_health
@@ -43,7 +51,7 @@ def clean_repo_types(repo):
 
 def ensure_repo_loaded():
     if "repo" not in st.session_state:
-        repo = readRepoFromJson() or {}
+        repo = read_repo() or {}
         st.session_state.repo = clean_repo_types(repo)
 
 # available_categories = sorted({param.get("category", "Uncategorized") for param in st.session_state.repo.values()})
@@ -62,10 +70,18 @@ def render_repo():
     if "show_new_param_builder" not in st.session_state:
         st.session_state.show_new_param_builder = False
 
+    # Branch selector and storage info
+    if is_github_mode():
+        col_branch, col_status = st.columns([2, 3])
+        with col_branch:
+            render_branch_selector(key="repo_branch")
+        with col_status:
+            render_storage_status()
+
     col = st.columns([1, 1])
     with col[0]:
         st.title("Parameters Repository")
-        if st.button("➕ Add new parameter", type="primary"):
+        if st.button("Add new parameter", type="primary"):
             myfn(next_id_for_repo())
 
     # Load repo
@@ -143,7 +159,10 @@ def repoToState(repoinJson):
 
 def stateToRepo():
     repoData = st.session_state.get("repo", {})
-    writeRepoToJson(repoData)
+    commit_msg = "Update parameter repository"
+    success, message = write_repo(repoData, commit_message=commit_msg)
+    if not success:
+        st.error(f"Failed to save repository: {message}")
 
 
 def addParamToRepo(param):
@@ -454,7 +473,7 @@ def newParamBuilder(param_id):
         
         if saved_count > 0:
             st.session_state.repo = repo
-            writeRepoToJson(repo)
+            write_repo(repo, commit_message="Add new parameters")
             st.success(f"Successfully added {saved_count} parameters.")
             # Clear bulk params
             st.session_state.bulk_params = {}
@@ -541,7 +560,7 @@ def confirm_update_dialog(full_schema_map, param_name):
             # 2. Update Local Repo (Atomic Commit)
             if draft_data:
                 st.session_state.repo[param_name] = draft_data
-                writeRepoToJson(st.session_state.repo)
+                write_repo(st.session_state.repo, commit_message="Update parameter")
                 st.toast("Repository updated.")
 
             if success_count > 0:
@@ -747,7 +766,7 @@ def edit_param_dialog(param_name):
             st.rerun()
         else:
             st.session_state.repo[param_name] = draft_param_data
-            writeRepoToJson(st.session_state.repo)
+            write_repo(st.session_state.repo, commit_message="Update parameter")
             st.toast(f"Parameter '{param_name}' updated.")
             
             # GRANULAR CACHE SYNC (No schemas updated, but health might be affected) 🧠

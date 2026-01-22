@@ -1,0 +1,82 @@
+name: Sync Schemas to GCS (Service Account Key)
+
+# Alternative workflow using service account key instead of Workload Identity
+# Use this if you haven't set up Workload Identity Federation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'schemas/**'
+  workflow_dispatch:
+    inputs:
+      force_sync:
+        description: 'Force sync all files'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  SCHEMA_PATH: schemas
+  GCS_BUCKET: ${{ secrets.GCS_BUCKET_NAME }}
+
+jobs:
+  sync:
+    name: Validate and Sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Validate JSON syntax
+        run: |
+          echo "Validating JSON syntax..."
+          for file in ${{ env.SCHEMA_PATH }}/*.json; do
+            if [ -f "$file" ]; then
+              echo "Checking: $file"
+              python3 -c "import json; json.load(open('$file'))" || exit 1
+            fi
+          done
+          echo "All JSON files are valid!"
+
+      - name: Determine files to sync
+        id: files
+        run: |
+          if [ "${{ inputs.force_sync }}" = "true" ]; then
+            FILES=$(find ${{ env.SCHEMA_PATH }} -name "*.json" -type f | tr '\n' ' ')
+          else
+            FILES=$(git diff --name-only HEAD~1 HEAD -- '${{ env.SCHEMA_PATH }}/*.json' 2>/dev/null | tr '\n' ' ')
+            # Fallback to all files if git diff fails
+            if [ -z "$FILES" ]; then
+              FILES=$(find ${{ env.SCHEMA_PATH }} -name "*.json" -type f | tr '\n' ' ')
+            fi
+          fi
+          echo "files=$FILES" >> $GITHUB_OUTPUT
+          echo "Files to sync: $FILES"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Sync to GCS
+        if: steps.files.outputs.files != ''
+        run: |
+          for file in ${{ steps.files.outputs.files }}; do
+            if [ -f "$file" ]; then
+              FILENAME=$(basename "$file")
+              echo "Uploading $file -> gs://${{ env.GCS_BUCKET }}/$FILENAME"
+              gsutil cp "$file" "gs://${{ env.GCS_BUCKET }}/$FILENAME"
+            fi
+          done
+
+      - name: List bucket contents
+        run: |
+          echo "Current bucket contents:"
+          gsutil ls "gs://${{ env.GCS_BUCKET }}/*.json" | head -20
