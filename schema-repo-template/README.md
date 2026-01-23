@@ -2,6 +2,37 @@
 
 This repository contains event validation schemas for the Events Validator platform.
 
+## Quick Start
+
+### Automated Setup (Recommended)
+
+Use the setup scripts to automatically create and configure your schema repository:
+
+```bash
+# Interactive setup wizard
+./setup-interactive.sh
+
+# Or use command-line arguments
+./setup-schema-repo.sh \
+  --owner your-org \
+  --name event-schemas \
+  --bucket your-gcs-bucket \
+  --sa-key /path/to/service-account.json \
+  --copy-schemas
+```
+
+The setup scripts will:
+1. Create a new GitHub repository
+2. Copy GitHub Actions workflows
+3. Configure repository secrets for GCS sync
+4. Optionally copy existing schemas
+5. Optionally enable branch protection
+
+### Prerequisites
+
+- [GitHub CLI](https://cli.github.com/) installed and authenticated (`gh auth login`)
+- GCP service account with `Storage Object Admin` role (for GCS sync)
+
 ## Structure
 
 ```
@@ -28,6 +59,26 @@ schemas/
 | `feature/*` | Development branches | `branches/{branch-name}/` |
 
 ## Setup
+
+### Automated Setup Options
+
+```bash
+./setup-schema-repo.sh [options]
+
+Options:
+  -o, --owner         GitHub owner (org or user) [required]
+  -n, --name          Repository name [default: event-schemas]
+  -b, --bucket        GCS bucket name [required for GCS sync]
+  -p, --private       Create as private repository [default: public]
+  -s, --sa-key        Path to GCP service account key JSON file
+  --wif-provider      Workload Identity Federation provider
+  --wif-sa            Service account email for WIF
+  --copy-schemas      Copy existing schemas from source directory
+  --source-dir        Source directory for schemas
+  -h, --help          Show help message
+```
+
+### Manual Setup
 
 ### 1. Configure GitHub Secrets
 
