@@ -77,11 +77,87 @@ The validator expects a JSON body with a `data` object containing the event deta
 }
 ```
 
-### Supported Features
-*   **Structure Validation**: Ensures required parameters are present.
-*   **Type Checking**: Validates data types (string, number, boolean, etc.).
-*   **Value Constraints**: (Optional) specific allowed values or regex patterns defined in your GCS schemas.
-*   **Unknown Parameters**: Flags parameters not defined in the schema (configurable).
+### ✅ Validation Capabilities
+
+The validator supports two levels of features: those accessible via the **Streamlit UI** (for easy management) and the full set supported by the **Cloud Function** (for advanced use cases via manual schema editing).
+
+#### 1. Streamlit UI (No-Code)
+The UI allows you to define these validations visually:
+*   **Structure Validation**: Automatically checks if required parameters are present in the event.
+*   **Type Checking**: `string`, `number`, `boolean`, `array`.
+*   **Exact Match**: Enforce a specific value (e.g., `event_name` must be `purchase`).
+*   **Regex Pattern**: Validate strings against a Regular Expression (e.g., `^user_\d+$`).
+*   **Array Items**: Define a schema for items within an array.
+*   **"Any" Value**: Enforces the **Type** but ignores the specific value.
+*   **Nullable Numbers**: In the UI, clearing a number field sets it to "empty" (null/undefined) rather than `0`.
+
+#### 2. Cloud Function (Full Engine)
+The core validation engine (`validator_src`) supports additional advanced features if you edit JSON schemas manually:
+*   **Object Type**: Validate nested JSON objects (not just arrays of objects).
+
+*   **Exact Length**: Validate that an array or string has a specific exact length (via `length` property in JSON).
+*   **Required/Optional**: By default, all fields in the schema are **Required**. You can mark fields as `optional: true` in the JSON to allow them to be missing.
+
+
+
+#### ℹ️ Supported Data Types
+| Type | Description | UI Support | Code Support |
+| :--- | :--- | :---: | :---: |
+| `string` | Text values. | ✅ | ✅ |
+| `number` | Integers or Floats. | ✅ | ✅ |
+| `boolean` | `true` or `false`. | ✅ | ✅ |
+| `array` | List of items (can have nested schemas). | ✅ | ✅ |
+| `object` | Nested JSON object. | ❌ | ✅ |
+| **regex** | Regular Expression Pattern. | ❌ | ✅ |
+
+> [!TIP]
+> **Regex Best Practice**: For strict validation, always use start (`^`) and end (`$`) anchors. Without them, the validator accepts partial matches (e.g., pattern `\d+` will validly match `"abc123xyz"`).
+
+### 🔧 Advanced Schema Configuration (Manual Edit)
+
+To utilize features not yet available in the UI (like nested Objects, Regex patterns, or exact length checks), you can manually edit the JSON schema file in your Google Cloud Storage bucket.
+
+#### 1. Nested Object Validation
+Use this structure to validate a generic object (e.g. `user_info`) containing specific fields.
+
+```json
+"user_info": {
+  "type": "object",
+  "nestedSchema": {
+    "user_id": { "type": "string" },
+    "is_active": { "type": "boolean" }
+  }
+}
+```
+
+#### 2. Exact Length (`length`)
+Validates that a **String** or **Array** has an exact specific length.
+*(Note: This is strictly for exact length, not min/max).*
+
+```json
+"transaction_id": {
+  "type": "string",
+  "length": 10
+},
+"items": {
+  "type": "array",
+  "length": 3,
+  "nestedSchema": { ... }
+}
+```
+
+#### 3. Optional Fields
+By default, the validator treats every field defined in the schema as **Required**. If a required field is missing or empty, validation fails.
+Use `"optional": true` to allow a field to be missing, `null`, or an empty string.
+
+```json
+"promo_code": {
+  "type": "string",
+  "optional": true
+}
+```
+
+
 
 ## 💰 Cost Estimation
 
@@ -117,12 +193,17 @@ You need a **Deployer Service Account** to run Terraform. **Never commit the `.j
 1.  Create a Service Account in the [IAM Console](https://console.cloud.google.com/iam-admin/serviceaccounts).
 2.  **Assign Roles**:
     *   `Editor` (Fastest for testing) **OR** the following specific roles:
-        *   `Cloud Functions Admin` & `Cloud Run Admin` (For the validator function)
-        *   `API Gateway Admin` & `Service Management Administrator` (For the entry point)
-        *   `BigQuery Admin` & `Storage Admin` (For logs and schemas)
-        *   `Service Account Admin` (To create user identities)
-        *   `Project IAM Admin` (To grant permissions to the worker account)
-        *   `Service Usage Admin` (To enable APIs automatically)
+        *   `API Keys Admin` (For Gateway security)
+        *   `ApiGateway Admin` (For the entry point)
+        *   `Artifact Registry Administrator` (For UI images)
+        *   `BigQuery Admin` (For logs)
+        *   `Cloud Functions Admin` & `Cloud Run Admin` (For the validator function and UI)
+        *   `Compute Admin` (For Load Balancer and Global IPs)
+        *   `IAP Policy Admin` & `IAP Settings Admin` (For UI authentication)
+        *   `Project IAM Admin` (To grant permissions to worker accounts)
+        *   `Service Account Admin` & `Service Account Key Admin` (To manage identities)
+        *   `Service Management Administrator` & `Service Usage Admin` (To enable APIs automatically)
+        *   `Storage Admin` (For logs and schemas)
     *   `Service Account User` (Always required for Terraform to deploy resources)
 3.  Generate a JSON key and save it as `terraform_backend/credentials.json` (and `terraform_ui/credentials.json` if deploying UI).
 
