@@ -8,13 +8,9 @@ terraform {
         source  = "hashicorp/google-beta"
         version = ">= 4.0.0"
     }
-    local = {
-        source  = "hashicorp/local"
-        version = ">= 2.1.0"
-    }
-    time = {
-        source  = "hashicorp/time"
-        version = ">= 0.9.0"
+    github = {
+      source  = "integrations/github"
+      version = "~> 5.0"
     }
   }
 }
@@ -35,4 +31,9 @@ provider "random" {
 }
 
 provider "archive" {
+}
+
+provider "github" {
+  token = var.github_token
+  owner = var.schema_repo_owner
 }

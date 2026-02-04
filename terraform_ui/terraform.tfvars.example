@@ -12,3 +12,10 @@ iap_client_id     = "YOUR_CLIENT_ID"
 iap_client_secret = "YOUR_CLIENT_SECRET"
 authorized_users  = ["user:you@example.com"]
 streamlit_image_tag = "latest"
+
+# --- GitHub Integration (Optional) ---
+github_token           = "ghp_xxxxxxxxxxxx"
+schema_repo_owner      = "your-org"
+schema_repo_name       = "event-schemas"
+schema_repo_path       = "schemas"
+schema_repo_branch     = "main"

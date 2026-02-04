@@ -17,3 +17,10 @@ LOG_PAYLOAD_WHEN_VALID_FLAG = false
 # Deletion Safeguards (Recommended for production)
 deletion_protection   = true
 force_destroy_buckets = false
+
+# --- GitHub Integration (GitOps) ---
+# Required for syncing schemas via Workload Identity Federation
+github_token             = "ghp_xxxxxxxxxxxxxxxxxxx"  # PAT with 'repo' and 'workflow' scope
+schema_repo_owner        = "your-github-username"
+schema_repo_name         = "event-schemas"
+enable_branch_protection = false # Set to true if you have GitHub Pro or a Public repo

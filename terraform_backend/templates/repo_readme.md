@@ -3,37 +3,9 @@
 This repository contains event validation schemas for the Events Validator platform.
 
 ## Quick Start
+Since this repository is managed via Terraform, all CI/CD workflows and secrets are pre-configured.
 
-### Automated Setup (Recommended)
-
-Use the setup scripts to automatically create and configure your schema repository:
-
-```bash
-# Interactive setup wizard
-./setup-interactive.sh
-
-# Or use command-line arguments
-./setup-schema-repo.sh \
-  --owner your-org \
-  --name event-schemas \
-  --bucket your-gcs-bucket \
-  --sa-key /path/to/service-account.json \
-  --copy-schemas
-```
-
-The setup scripts will:
-1. Create a new GitHub repository
-2. Copy GitHub Actions workflows
-3. Configure repository secrets for GCS sync
-4. Optionally copy existing schemas
-5. Optionally enable branch protection
-
-### Prerequisites
-
-- [GitHub CLI](https://cli.github.com/) installed and authenticated (`gh auth login`)
-- GCP service account with `Storage Object Admin` role (for GCS sync)
-
-## Structure
+### Structure
 
 ```
 schemas/
@@ -58,54 +30,19 @@ schemas/
 | `staging` | Pre-production testing | `staging/` |
 | `feature/*` | Development branches | `branches/{branch-name}/` |
 
-## Setup
+## Authentication (Workload Identity Federation)
+This repository is configured to use **Keyless Authentication** (Workload Identity Federation) for security.
 
-### Automated Setup Options
+> **Note**: If you deployed using Terraform, all necessary secrets and Workload Identity pools have been configured automatically.
 
-```bash
-./setup-schema-repo.sh [options]
+Required Secrets (User-Managed or Terraform-Managed):
+- `GCS_BUCKET_NAME`: Target GCS bucket.
+- `GCP_WORKLOAD_IDENTITY_PROVIDER`: Full path to the WIF Provider.
+- `GCP_SERVICE_ACCOUNT`: Service Account email used for impersonation.
 
-Options:
-  -o, --owner         GitHub owner (org or user) [required]
-  -n, --name          Repository name [default: event-schemas]
-  -b, --bucket        GCS bucket name [required for GCS sync]
-  -p, --private       Create as private repository [default: public]
-  -s, --sa-key        Path to GCP service account key JSON file
-  --wif-provider      Workload Identity Federation provider
-  --wif-sa            Service account email for WIF
-  --copy-schemas      Copy existing schemas from source directory
-  --source-dir        Source directory for schemas
-  -h, --help          Show help message
-```
+**Legacy Authentication (JSON Keys)** is disabled by default for security reasons.
 
-### Manual Setup
-
-### 1. Configure GitHub Secrets
-
-Add the following secrets to your repository:
-
-| Secret | Description |
-|--------|-------------|
-| `GCS_BUCKET_NAME` | Your GCS bucket name (e.g., `event_validator_schemas_bucket-abc123`) |
-| `GCP_SA_KEY` | Service account JSON key (for simple auth) |
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Workload Identity provider (for keyless auth) |
-| `GCP_SERVICE_ACCOUNT` | Service account email (for keyless auth) |
-
-### 2. Choose Authentication Method
-
-**Option A: Service Account Key (simpler)**
-- Create a service account with `Storage Object Admin` role
-- Download the JSON key
-- Add it as `GCP_SA_KEY` secret
-- Use the `sync-to-gcs-simple.yml` workflow
-
-**Option B: Workload Identity Federation (more secure)**
-- Set up Workload Identity Federation in GCP
-- Configure the identity pool to trust GitHub Actions
-- Add provider and service account as secrets
-- Use the `sync-to-gcs.yml` workflow
-
-### 3. Configure Events Validator UI
+## UI Configuration
 
 In the Events Validator UI environment:
 
@@ -200,12 +137,6 @@ Example:
 - Syncs only changed files to GCS
 - Supports branch-based prefixes
 
-### Simple Sync Workflow (`sync-to-gcs-simple.yml`)
-
-- Triggers on push to `main` only
-- Uses service account key authentication
-- Syncs changed files to GCS root (no prefixes)
-
 ## Local Development
 
 To test schemas locally:
@@ -213,9 +144,6 @@ To test schemas locally:
 ```bash
 # Validate JSON syntax
 for f in schemas/*.json; do python3 -c "import json; json.load(open('$f'))"; done
-
-# Sync manually with gsutil
-gsutil cp schemas/*.json gs://YOUR_BUCKET/
 ```
 
 ## Contributing
@@ -225,23 +153,3 @@ gsutil cp schemas/*.json gs://YOUR_BUCKET/
 3. Ensure JSON is valid and follows the schema format
 4. Create a pull request
 5. After review and merge, schemas are automatically synced to GCS
-
-## Troubleshooting
-
-### Sync Not Working
-
-1. Check GitHub Actions logs for errors
-2. Verify secrets are configured correctly
-3. Ensure service account has `Storage Object Admin` permission
-
-### Schema Validation Failing
-
-1. Check JSON syntax with a JSON validator
-2. Ensure required fields (`event_name`, `version`) are present
-3. Verify field types match expectations
-
-### UI Not Showing Updates
-
-1. Check the branch selector matches your working branch
-2. Use the "Refresh from GitHub" button
-3. Verify `GITHUB_TOKEN` has read access to the repository

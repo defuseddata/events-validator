@@ -40,6 +40,45 @@ resource "github_repository_file" "repo_json" {
 }
 
 
+# --- GitHub Workflow Deployment ---
+resource "github_repository_file" "workflow_file" {
+  repository          = var.schema_repo_name
+  branch              = "main"
+  file                = ".github/workflows/sync-to-gcs.yml"
+  content             = file("${path.module}/templates/sync-to-gcs.yml")
+  commit_message      = "Add GCS Sync Workflow (GCP Workload Identity) via Terraform"
+  commit_author       = "Terraform"
+  commit_email        = "terraform@example.com"
+  overwrite_on_create = true
+
+  lifecycle {
+    ignore_changes = [
+      commit_message,
+      commit_author,
+      commit_email,
+    ]
+  }
+}
+
+resource "github_repository_file" "readme" {
+  repository          = var.schema_repo_name
+  branch              = "main"
+  file                = "README.md"
+  content             = file("${path.module}/templates/repo_readme.md")
+  commit_message      = "Update README docs via Terraform"
+  commit_author       = "Terraform"
+  commit_email        = "terraform@example.com"
+  overwrite_on_create = true
+
+  lifecycle {
+    ignore_changes = [
+      commit_message,
+      commit_author,
+      commit_email,
+    ]
+  }
+}
+
 
 # --- Service Account for GitHub Actions ---
 resource "google_service_account" "github_actions" {
@@ -56,17 +95,20 @@ resource "google_storage_bucket_iam_member" "github_actions_writer" {
 # --- Workload Identity Federation ---
 
 resource "google_iam_workload_identity_pool" "github_pool" {
-  workload_identity_pool_id = "github-actions-pool-v3"
-  display_name              = "GitHub Actions Pool"
+  workload_identity_pool_id = "gh-pool-v7"
+  display_name              = "GitHub Actions Pool v7"
   description               = "Identity pool for GitHub Actions"
 }
 
 resource "google_iam_workload_identity_pool_provider" "github_provider" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.github_pool.workload_identity_pool_id
-  workload_identity_pool_provider_id = "github-provider"
-  display_name                       = "GitHub Provider"
+  workload_identity_pool_provider_id = "gh-provider-v7"
+  display_name                       = "GitHub Provider v7"
   description                        = "OIDC Provider for GitHub Actions"
   
+  # Explicit condition required by API to avoid "condition must reference claims" error
+  attribute_condition = "assertion.repository == '${var.schema_repo_owner}/${var.schema_repo_name}'"
+
   attribute_mapping = {
     "google.subject"       = "assertion.sub"
     "attribute.actor"      = "assertion.actor"
@@ -106,4 +148,23 @@ resource "github_actions_secret" "gcs_bucket_name" {
   repository      = var.schema_repo_name
   secret_name     = "GCS_BUCKET_NAME"
   plaintext_value = google_storage_bucket.eventvalidator_schemas_bucket.name
+}
+
+# --- Branch Protection ---
+resource "github_branch_protection" "main" {
+  count         = var.enable_branch_protection ? 1 : 0
+  repository_id = var.schema_repo_name
+  pattern       = "main"
+
+  required_status_checks {
+    strict   = true
+    contexts = ["Validate Schemas"]
+  }
+
+  required_pull_request_reviews {
+    dismiss_stale_reviews           = true
+    required_approving_review_count = 0 # 0 allows merging your own PRs, but enforces the PR flow
+  }
+  
+  enforce_admins = false
 }

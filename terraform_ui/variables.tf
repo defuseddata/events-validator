@@ -47,13 +47,44 @@ variable "iap_client_secret" {
 }
 
 variable "authorized_users" {
-  description = "List of emails (users/groups) authorized to access the UI via IAP"
+  description = "List of users authorized to access the app via IAP (e.g. user:email@example.com)"
   type        = list(string)
-  default     = []
 }
 
 variable "streamlit_image_tag" {
-  description = "The tag of the image to deploy for the Streamlit UI"
+  description = "Tag of the Streamlit Docker image to deploy"
   type        = string
   default     = "latest"
+}
+
+# --- GitHub Integration ---
+variable "github_token" {
+  description = "GitHub Personal Access Token for schema sync"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "schema_repo_owner" {
+  description = "Owner of the schema repository (user or org)"
+  type        = string
+  default     = ""
+}
+
+variable "schema_repo_name" {
+  description = "Name of the schema repository"
+  type        = string
+  default     = ""
+}
+
+variable "schema_repo_path" {
+  description = "Path to schemas within the repository"
+  type        = string
+  default     = "schemas"
+}
+
+variable "schema_repo_branch" {
+  description = "Default branch for the schema repository"
+  type        = string
+  default     = "main"
 }

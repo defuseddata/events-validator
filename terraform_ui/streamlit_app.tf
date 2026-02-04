@@ -42,6 +42,26 @@ resource "google_cloud_run_v2_service" "streamlit_ui" {
         name  = "BQ_TABLE"
         value = var.bq_table
       }
+      env {
+        name  = "GITHUB_TOKEN"
+        value = var.github_token
+      }
+      env {
+        name  = "SCHEMA_REPO_OWNER"
+        value = var.schema_repo_owner
+      }
+      env {
+        name  = "SCHEMA_REPO_NAME"
+        value = var.schema_repo_name
+      }
+      env {
+        name  = "SCHEMA_REPO_PATH"
+        value = var.schema_repo_path
+      }
+      env {
+        name  = "SCHEMA_REPO_DEFAULT_BRANCH"
+        value = var.schema_repo_branch
+      }
     }
   }
 }
