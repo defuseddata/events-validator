@@ -1,16 +1,15 @@
 const { logError, logValidField } = require('./loggingHelpers.js');
 const { logValidFieldsFlag } = require('./cloudHelpers.js');
 
-function checkType(schemaObject, key, dataToValidate, parentPath = '', eventName, eventId, rootData) {
+function checkType(schemaObject, key, dataToValidate, parentPath = '', eventName, eventId, rootData, getByPathFn) {
 	const expected = schemaObject[key].type;
 	const fieldPath = parentPath ? `${parentPath}.${key}` : key;
 	const actual = Array.isArray(dataToValidate[key]) ? 'array' : typeof dataToValidate[key];
 	const _root = rootData || dataToValidate;
+	const isOptional = schemaObject[key].optional === true || schemaObject[key].required === false;
 
 	if (expected === 'string') {
-		const value = dataToValidate[key];
-		const isOptional = schemaObject[key]?.optional === true || schemaObject[key]?.required === false;
-
+		const value = dataToValidate[ key ];
 		if (isOptional && (value === undefined || value === null)) {
 			return;
 		}
@@ -39,9 +38,13 @@ function checkType(schemaObject, key, dataToValidate, parentPath = '', eventName
 			dataToValidate[key].forEach((nestedItem, index) => {
 				const itemPath = `${fieldPath}[${index}]`;
 				if (typeof nestedItem !== 'object' || nestedItem === null) {
-					checkWithSchema(schemaObject[key].nestedSchema, { '': nestedItem }, itemPath, eventName, eventId, _root);
+					// Handling array of primitives if nestedSchema defined? 
+					// Usually nestedSchema implies array of objects.
+					// If array of strings, schema structure might be different.
+					// Assuming array of objects for nestedSchema presence.
+					checkWithSchema(schemaObject[key].nestedSchema, { '': nestedItem }, itemPath, eventName, eventId, _root, getByPathFn);
 				} else {
-					checkWithSchema(schemaObject[key].nestedSchema, nestedItem, itemPath, eventName, eventId, _root);
+					checkWithSchema(schemaObject[key].nestedSchema, nestedItem, itemPath, eventName, eventId, _root, getByPathFn);
 				}
 			});
 			return;
@@ -59,7 +62,7 @@ function checkType(schemaObject, key, dataToValidate, parentPath = '', eventName
 			return;
 		}
 		if (schemaObject[key].nestedSchema) {
-			checkWithSchema(schemaObject[key].nestedSchema, val, fieldPath, eventName, eventId, _root);
+			checkWithSchema(schemaObject[key].nestedSchema, val, fieldPath, eventName, eventId, _root, getByPathFn);
 			return;
 		}
 		logValidField(fieldPath, expected, 'valid', logValidFieldsFlag, eventId, eventName, _root);
@@ -126,8 +129,7 @@ function checkRegex(schemaObject, key, dataToValidate, parentPath = '', eventNam
 	}
 }
 
-
-function checkWithSchema(schemaObject, dataToValidate, parentPath = '', eventName, eventId, rootData) {
+function checkWithSchema(schemaObject, dataToValidate, parentPath = '', eventName, eventId, rootData, getByPathFn) {
 	const _root = rootData || dataToValidate;
 
 	for (const key in schemaObject) {
@@ -135,6 +137,24 @@ function checkWithSchema(schemaObject, dataToValidate, parentPath = '', eventNam
 
 		const rule = schemaObject[key];
 		const fieldPath = parentPath ? `${parentPath}.${key}` : key;
+		if (rule.validate_if_present) {
+            if (typeof getByPathFn === 'function') {
+                const targetValue = getByPathFn(_root, rule.validate_if_present);
+                if (targetValue === undefined || targetValue === null) {
+                    continue;
+                }
+                if (!Object.prototype.hasOwnProperty.call(dataToValidate, key)) {
+                     logError(
+                        fieldPath, 
+                        'missing_conditional', 
+                        'field present', 
+                        'field missing', 
+                        eventName, _root, eventId
+                     );
+                     continue;
+                }
+            }
+		}
 
 		const hasKey = Object.prototype.hasOwnProperty.call(dataToValidate, key);
 		const isOptional = rule.optional === true || rule.required === false;
@@ -155,7 +175,7 @@ function checkWithSchema(schemaObject, dataToValidate, parentPath = '', eventNam
 		if (rule.hasOwnProperty('value'))
 			checkValue(schemaObject, key, dataToValidate, parentPath, eventName, eventId, _root);
 		if (rule.hasOwnProperty('type'))
-			checkType(schemaObject, key, dataToValidate, parentPath, eventName, eventId, _root);
+			checkType(schemaObject, key, dataToValidate, parentPath, eventName, eventId, _root, getByPathFn);
 		if (rule.hasOwnProperty('length'))
 			checkLength(schemaObject, key, dataToValidate, parentPath, eventName, eventId, _root);
 		if (rule.hasOwnProperty('regex'))

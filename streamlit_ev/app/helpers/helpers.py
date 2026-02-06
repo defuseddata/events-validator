@@ -74,7 +74,9 @@ def convert_export_to_internal(export):
             "type": props.get("type", ""),
             "value": props.get("value", ""),
             "regex": props.get("regex", ""),
-            "description": props.get("description", "") 
+            "description": props.get("description", ""),
+            "optional": props.get("optional", False),
+            "validate_if_present": props.get("validate_if_present", "")
         }
 
         # array
@@ -87,7 +89,9 @@ def convert_export_to_internal(export):
                     "type": np.get("type", ""),
                     "value": np.get("value", ""),
                     "regex": np.get("regex", ""),
-                    "description": np.get("description", "")
+                    "description": np.get("description", ""),
+                    "optional": np.get("optional", False),
+                    "validate_if_present": np.get("validate_if_present", "")
                 }
                 i += 1
             field["nestedSchema"] = nested
@@ -133,6 +137,11 @@ def export_schema():
             "type": field.get("type", ""),
             "description": field.get("description", "")  # <-- ADD DESCRIPTION
         }
+        # Add Optional & Conditional
+        if field.get("optional"):
+            props["optional"] = True
+        if field.get("validate_if_present"):
+            props["validate_if_present"] = field["validate_if_present"]
 
         if field["type"] != "array":
             val = field.get("value")
@@ -167,6 +176,12 @@ def export_schema():
                         try: nv = float(nv) if "." in nv else int(nv)
                         except: pass
                     np["value"] = nv
+                
+                # Add Optional & Conditional (Nested)
+                if nested.get("optional"):
+                    np["optional"] = True
+                if nested.get("validate_if_present"):
+                    np["validate_if_present"] = nested.get("validate_if_present")
                 
                 # Description
                 np["description"] = nested.get("description", "")
