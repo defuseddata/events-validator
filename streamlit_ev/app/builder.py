@@ -86,6 +86,103 @@ def render_schema_param(field_id, field):
     if act_cols[1].button("❌", key=f"schema_delete_{field_id}"):
         delete_field_and_rerun(field_id)
 
+    # Advanced Label Logic
+    adv_label = "Advanced"
+    current_vip = field.get("validate_if_present", "")
+    warning_active = False
+
+    if current_vip:
+         dep_check = next((f for f in st.session_state.schema.values() if f.get("key") == current_vip), None)
+         if not dep_check:
+             adv_label += " ⚠️ (Missing Dep)"
+             warning_active = True
+         elif dep_check.get("optional") is True:
+             adv_label += " ℹ️ (Dep Optional)"
+             # Don't auto-expand for info messages, only for missing deps (errors)
+             # warning_active = True
+
+    with st.expander(adv_label, expanded=warning_active):
+        c_adv = st.columns(2)
+        
+        repo = st.session_state.get("repo", {})
+        all_params = sorted(list(repo.keys()))
+        
+        # 1. Determine Current Mode
+        current_mode = "Required (Always)"
+        if current_vip:
+             current_mode = "Conditional (Dependent)"
+        elif field.get("optional"):
+             current_mode = "Optional"
+             
+        mode_options = ["Required (Always)", "Optional", "Conditional (Dependent)"]
+        
+        # 2. Render Mode Selector
+        new_mode = st.radio("Validation Requirement", options=mode_options, index=mode_options.index(current_mode), key=f"mode_{field_id}", horizontal=True)
+        
+        # 3. Handle Conditional Dependency Input
+        target_vip = ""
+        if new_mode == "Conditional (Dependent)":
+             # Show param selector
+             if current_vip and current_vip not in all_params:
+                 all_params.append(current_vip)
+             
+             p_opts = [""] + all_params
+             v_idx = p_opts.index(current_vip) if current_vip in p_opts else 0
+             target_vip = st.selectbox("Dependency Parameter", options=p_opts, index=v_idx, key=f"vip_sel_{field_id}", help="Validation runs ONLY if this parameter is present.")
+             
+             if not target_vip:
+                 st.warning("⚠️ No dependency selected. This field will behave as 'Optional'.")
+        
+        # 4. Update Schema State Logic
+        # Calculate new state based on Mode + VIP input
+        new_is_opt = False
+        new_vip_val = ""
+        
+        if new_mode == "Optional":
+             new_is_opt = True
+        elif new_mode == "Conditional (Dependent)":
+             new_is_opt = True # Conditional implies optional base
+             new_vip_val = target_vip
+             
+        # Apply changes if anything diff
+        has_changed = False
+        if field.get("optional", False) != new_is_opt:
+             field["optional"] = new_is_opt
+             has_changed = True
+             
+        if field.get("validate_if_present", "") != new_vip_val:
+             field["validate_if_present"] = new_vip_val
+             has_changed = True
+             
+        if has_changed:
+             st.session_state.schema[field_id] = field
+             st.rerun()
+
+        # Resolution Actions (Dependency Missing check)
+        new_vip = field.get("validate_if_present", "")
+        if new_vip:
+             dep_field = next((f for f in st.session_state.schema.values() if f.get("key") == new_vip), None)
+
+        # Resolution Actions (inside expander)
+        if new_vip:
+             dep_field = next((f for f in st.session_state.schema.values() if f.get("key") == new_vip), None)
+             
+             if not dep_field:
+                  st.warning(f"Dependency '{new_vip}' is not in this schema yet.")
+                  if st.button(f"➕ Add '{new_vip}' to schema", key=f"add_dep_{field_id}"):
+                       # Start Auto-Add Logic
+                       if new_vip in repo:
+                            new_internal = convert_repo_param_to_internal(new_vip, repo[new_vip])
+                            add_schema_name_to_param_in_repo(new_vip, st.session_state.event_name)
+                            new_sch_id = next_id_for_schema()
+                            st.session_state.schema[new_sch_id] = new_internal
+                            st.rerun()
+                       else:
+                            st.error(f"Cannot find '{new_vip}' in Repo.")
+             
+             elif dep_field.get("optional") is True:
+                  st.info(f"ℹ️ Dependency '{new_vip}' is optional. Validation will be skipped if '{new_vip}' is missing.")
+
     st.markdown("---")
 # RENDER READ-ONLY ARRAY FIELD
 def render_array_param(field_id, field):
@@ -154,6 +251,96 @@ def render_array_param(field_id, field):
                 nf["value"] = r_val
                 st.session_state.schema[field_id]["nestedSchema"][nid] = nf
                 st.rerun()
+        # Nested Advanced Label Logic
+        n_adv_label = f"Advanced ({n_key})"
+        n_vip = nf.get("validate_if_present", "")
+        n_warning_active = False
+
+        if n_vip:
+             # Check root schema for dependency
+             dep_check_n = next((f for f in st.session_state.schema.values() if f.get("key") == n_vip), None)
+             if not dep_check_n:
+                 n_adv_label += " ⚠️ (Missing Dep)"
+                 n_warning_active = True
+             elif dep_check_n.get("optional") is True:
+                 n_adv_label += " ℹ️ (Dep Optional)"
+                 # Don't auto-expand for info messages
+                 # n_warning_active = True
+
+        with st.expander(n_adv_label, expanded=n_warning_active):
+             c_n_adv = st.columns(2)
+             
+             # 2. Nest Vip Select (Prepare options)
+             repo = st.session_state.get("repo", {})
+             all_params_n = sorted(list(repo.keys()))
+             
+             # UX SIMPLIFICATION (Nested)
+             # 1. Determine Mode
+             n_mode = "Required (Always)"
+             if n_vip:
+                  n_mode = "Conditional (Dependent)"
+             elif nf.get("optional"):
+                  n_mode = "Optional"
+             
+             n_opts = ["Required (Always)", "Optional", "Conditional (Dependent)"]
+             new_n_mode = st.radio("Validation Requirement", options=n_opts, index=n_opts.index(n_mode), key=f"n_mode_{field_id}_{nid}", horizontal=True)
+             
+             # 2. Dependency Input
+             n_target_vip = ""
+             if new_n_mode == "Conditional (Dependent)":
+                 repo = st.session_state.get("repo", {})
+                 all_params_n = sorted(list(repo.keys()))
+                 if n_vip and n_vip not in all_params_n:
+                     all_params_n.append(n_vip)
+                 
+                 np_opts = [""] + all_params_n
+                 nvip_idx = np_opts.index(n_vip) if n_vip in np_opts else 0
+                 n_target_vip = st.selectbox("Dependency Parameter", options=np_opts, index=nvip_idx, key=f"n_vip_sel_{field_id}_{nid}")
+
+                 if not n_target_vip:
+                     st.warning("⚠️ No dependency selected. This field will behave as 'Optional'.")
+
+             # 3. Update Logic
+             n_new_opt = False
+             n_new_vip_val = ""
+             
+             if new_n_mode == "Optional":
+                  n_new_opt = True
+             elif new_n_mode == "Conditional (Dependent)":
+                  n_new_opt = True
+                  n_new_vip_val = n_target_vip
+             
+             n_changed = False
+             if nf.get("optional", False) != n_new_opt:
+                  nf["optional"] = n_new_opt
+                  n_changed = True
+             if nf.get("validate_if_present", "") != n_new_vip_val:
+                  nf["validate_if_present"] = n_new_vip_val
+                  n_changed = True
+             
+             if n_changed:
+                  st.session_state.schema[field_id]["nestedSchema"][nid] = nf
+                  st.rerun()
+
+             # Warning Checks
+             n_new_vip = nf.get("validate_if_present", "")
+
+             if n_new_vip:
+                  dep_field_n = next((f for f in st.session_state.schema.values() if f.get("key") == n_new_vip), None)
+                  
+                  if not dep_field_n:
+                       st.warning(f"Dependency '{n_new_vip}' missing.")
+                       if st.button(f"➕ Add '{n_new_vip}'", key=f"add_dep_n_{field_id}_{nid}"):
+                            if n_new_vip in repo:
+                                 new_int = convert_repo_param_to_internal(n_new_vip, repo[n_new_vip])
+                                 add_schema_name_to_param_in_repo(n_new_vip, st.session_state.event_name)
+                                 n_sch_id = next_id_for_schema()
+                                 st.session_state.schema[n_sch_id] = new_int
+                                 st.rerun()
+                  
+                  elif dep_field_n.get("optional") is True:
+                      st.info(f"ℹ️ Dependency '{n_new_vip}' is optional. Validation will be skipped if '{n_new_vip}' is missing.")
+
     st.markdown("---")
 # MAIN BUILDER UI
 def render_builder():

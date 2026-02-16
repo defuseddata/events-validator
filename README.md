@@ -84,6 +84,8 @@ The validator supports two levels of features: those accessible via the **Stream
 #### 1. Streamlit UI (No-Code)
 The UI allows you to define these validations visually:
 *   **Structure Validation**: Automatically checks if required parameters are present in the event.
+*   **Optional Fields**: Mark fields as Optional (validation is skipped if the field is missing).
+*   **Conditional Validation**: Validate a field ONLY if another specific parameter is present (e.g., `item_id` required only if `item_list_name` exists).
 *   **Type Checking**: `string`, `number`, `boolean`, `array`.
 *   **Exact Match**: Enforce a specific value (e.g., `event_name` must be `purchase`).
 *   **Regex Pattern**: Validate strings against a Regular Expression (e.g., `^user_\d+$`).
@@ -94,9 +96,7 @@ The UI allows you to define these validations visually:
 #### 2. Cloud Function (Full Engine)
 The core validation engine (`validator_src`) supports additional advanced features if you edit JSON schemas manually:
 *   **Object Type**: Validate nested JSON objects (not just arrays of objects).
-
 *   **Exact Length**: Validate that an array or string has a specific exact length (via `length` property in JSON).
-*   **Required/Optional**: By default, all fields in the schema are **Required**. You can mark fields as `optional: true` in the JSON to allow them to be missing.
 
 
 

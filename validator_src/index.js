@@ -49,7 +49,7 @@ exports.validateEvent = (req, res) => {
         return res.status(404).send({ status: 'schema_not_found', message: `Schema not found for event: ${eventName}` });
       }
       try {
-        checkWithSchema(masterSchema, eventData, '', eventName, eventId);
+        checkWithSchema(masterSchema, eventData, '', eventName, eventId, eventData, getByPath);
 
         if (errorLogEntries.length > 0) {
           console.log('Validation errors found:', errorLogEntries);
