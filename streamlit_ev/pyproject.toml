@@ -10,6 +10,7 @@ dependencies = [
     "pandas>=2.3.3",
     "python-dotenv>=1.2.1",
     "reportlab>=4.4.7",
+    "requests>=2.31.0",
     "streamlit>=1.52.2",
     "streamlit-option-menu>=0.4.0",
     "db-dtypes>=1.5.0",

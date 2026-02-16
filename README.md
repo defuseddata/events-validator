@@ -209,6 +209,25 @@ You need a **Deployer Service Account** to run Terraform. **Never commit the `.j
 
 ---
 
+## 🔄 GitOps & CI/CD (GitHub Actions)
+
+This project implements a secure **GitOps** workflow using **Workload Identity Federation** (Keyless Authentication).
+
+1.  **Terraform Automation**:
+    *   Creates a `Workload Identity Pool` & `Provider` for GitHub in GCP.
+    *   Creates a dedicated Service Account for the CI/CD pipeline (`github-actions-uploader`).
+    *   Populates your GitHub Repository with initial schemas and configure secrets automatically:
+        *   `GCP_WORKLOAD_IDENTITY_PROVIDER`
+        *   `GCP_SERVICE_ACCOUNT`
+        *   `GCS_BUCKET_NAME`
+
+2.  **Workflow**:
+    *   Any push to `main` in your schema repository triggers a GitHub Action.
+    *   Authentication is handled via OIDC tokens (No long-lived JSON keys stored in secrets!).
+    *   Changed JSON schemas are validated and instantly synced to the GCS bucket.
+
+---
+
 ## 📂 File Ownership & Environment
 
 To achieve a "Zero-Touch" experience, Terraform manages most configuration files.
@@ -233,6 +252,18 @@ The infrastructure is split into two independent projects for flexibility:
 > [!IMPORTANT]
 > Before running `terraform apply`, you **must** create your own `terraform.tfvars` file from the provided example in each project directory. The `.tfvars` files contain sensitive configuration and are not committed to the repository.
 
+### Step 0: GitHub Preparation (Critical)
+1.  **Create a Repository**: Create a new, **empty** private repository on GitHub.
+    *   **Option A (Helper Script)**: Run `./scripts/create_repo.sh` to use an interactive wizard.
+    *   **Option B (Manual)**: Create it on GitHub.com. Do not initialize with README/.gitignore.
+2.  **Generate a Token**: Create a Personal Access Token (PAT).
+    *   **Classic Token (Recommended)**: Select scopes `repo` (full control) and `workflow`.
+    *   **Fine-grained Token**: Must have **Read and Write** access to:
+        *   `Contents`
+        *   `Secrets`
+        *   `Workflows`
+        *   `Administration` (Required for Branch Protection rules)
+
 ### Step 1: Deploy Backend (Required)
 
 ```bash
@@ -241,13 +272,16 @@ cd terraform_backend
 # Create your configuration file from the example
 cp terraform.tfvars.example terraform.tfvars
 
-# Edit terraform.tfvars with your project_id, region, location, and logging flags
+# Edit terraform.tfvars with:
+# 1. Project details (project_id, region, location)
+# 2. GitHub Integration (github_token, schema_repo_owner, schema_repo_name)
+#
 # IMPORTANT: Update all placeholder values before proceeding
 
 terraform init
 terraform apply
 ```
-*(Note: The deployment includes a 60s delay to allow Google's API Gateway to propagate.)*
+*(Note: The deployment includes a 60s delay to allow Google's API Gateway to propagate. Initial GA4 schemas will be pushed to your GitHub repository automatically.)*
 
 **Save the outputs** - you'll need them for the UI deployment:
 ```bash
@@ -264,8 +298,12 @@ cd terraform_ui
 # Create your configuration file from the example
 cp terraform.tfvars.example terraform.tfvars
 
-# Edit terraform.tfvars with your project_id, region, schemas_bucket (from backend), and IAP credentials
-# IMPORTANT: Update all placeholder values, including the schemas_bucket from Step 1 outputs
+# Edit terraform.tfvars with:
+# 1. Project details (project_id, region)
+# 2. schemas_bucket (from backend outputs)
+# 3. IAP credentials (iap_client_id, iap_client_secret)
+# 4. GitHub Integration (github_token, schema_repo_owner, etc.) for UI capabilities
+# IMPORTANT: Update all placeholder values
 
 terraform init
 terraform apply
@@ -279,7 +317,9 @@ terraform apply
     ```bash
     cd terraform_backend
     terraform output api_gateway_url
-    terraform output api_key
+    
+    # API Key is sensitive/hidden by default. Use -raw to reveal it:
+    terraform output -raw api_key
     ```
 2.  **Test the Validator**:
     ```bash

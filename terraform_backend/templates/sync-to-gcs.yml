@@ -1,0 +1,242 @@
+name: Sync Schemas to GCS
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+      - 'feature/**'
+    paths:
+      - 'schemas/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'schemas/**'
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to sync'
+        required: false
+        default: 'main'
+      force_sync:
+        description: 'Force sync all files'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  SCHEMA_PATH: schemas
+  GCS_BUCKET: ${{ secrets.GCS_BUCKET_NAME }}
+
+jobs:
+  validate:
+    name: Validate Schemas
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install ajv-cli for JSON Schema validation
+        run: npm install -g ajv-cli ajv-formats
+
+      - name: Validate JSON syntax
+        run: |
+          echo "Validating JSON syntax..."
+          for file in ${{ env.SCHEMA_PATH }}/*.json; do
+            if [ -f "$file" ]; then
+              echo "Checking: $file"
+              python3 -c "import json; json.load(open('$file'))" || exit 1
+            fi
+          done
+          echo "All JSON files are syntactically valid!"
+
+      - name: Check for required fields
+        run: |
+          echo "Checking required fields in schemas..."
+          for file in ${{ env.SCHEMA_PATH }}/*.json; do
+            if [ -f "$file" ] && [ "$(basename $file)" != "repo.json" ]; then
+              # Check for event_name field
+              if ! python3 -c "import json; d=json.load(open('$file')); assert 'event_name' in d, 'Missing event_name'" 2>/dev/null; then
+                echo "Warning: $file might be missing event_name field"
+              fi
+            fi
+          done
+          echo "Schema field checks completed!"
+
+  detect-changes:
+    name: Detect Changed Files
+    runs-on: ubuntu-latest
+    outputs:
+      changed_files: ${{ steps.changes.outputs.changed_files }}
+      has_changes: ${{ steps.changes.outputs.has_changes }}
+      branch_prefix: ${{ steps.branch.outputs.prefix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine branch prefix
+        id: branch
+        run: |
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+          if [ "$BRANCH_NAME" = "main" ]; then
+            PREFIX=""
+          elif [ "$BRANCH_NAME" = "staging" ]; then
+            PREFIX="staging/"
+          else
+            # For feature branches, use sanitized branch name
+            SAFE_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9]/-/g' | sed 's/--*/-/g')
+            PREFIX="branches/${SAFE_BRANCH}/"
+          fi
+          echo "prefix=$PREFIX" >> $GITHUB_OUTPUT
+          echo "Branch prefix: $PREFIX"
+
+      - name: Detect changed schema files
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force_sync }}" = "true" ]; then
+            # Force sync - include all files
+            CHANGED_FILES=$(find ${{ env.SCHEMA_PATH }} -name "*.json" -type f | tr '\n' ' ')
+          else
+            # Get changed files since last commit or between branches
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            else
+              BASE_SHA="${{ github.event.before }}"
+            fi
+
+            if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+              # Initial commit or new branch - sync all
+              CHANGED_FILES=$(find ${{ env.SCHEMA_PATH }} -name "*.json" -type f | tr '\n' ' ')
+            else
+              CHANGED_FILES=$(git diff --name-only $BASE_SHA ${{ github.sha }} -- '${{ env.SCHEMA_PATH }}/*.json' | tr '\n' ' ')
+            fi
+          fi
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "changed_files=" >> $GITHUB_OUTPUT
+            echo "No schema changes detected"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
+            echo "Changed files: $CHANGED_FILES"
+          fi
+
+  sync-to-gcs:
+    name: Sync to GCS
+    needs: [validate, detect-changes]
+    if: needs.detect-changes.outputs.has_changes == 'true' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Sync changed files to GCS
+        run: |
+          PREFIX="${{ needs.detect-changes.outputs.branch_prefix }}"
+          CHANGED_FILES="${{ needs.detect-changes.outputs.changed_files }}"
+
+          echo "Syncing to GCS bucket: ${{ env.GCS_BUCKET }}"
+          echo "Prefix: ${PREFIX:-'(root)'}"
+          echo "Files to sync: $CHANGED_FILES"
+
+          for file in $CHANGED_FILES; do
+            if [ -f "$file" ]; then
+              FILENAME=$(basename "$file")
+              DEST="gs://${{ env.GCS_BUCKET }}/${PREFIX}${FILENAME}"
+              echo "Uploading $file -> $DEST"
+              gsutil cp "$file" "$DEST"
+            fi
+          done
+
+      - name: Verify sync
+        run: |
+          PREFIX="${{ needs.detect-changes.outputs.branch_prefix }}"
+          echo "Listing schemas in GCS (prefix: ${PREFIX:-'root'})..."
+          gsutil ls "gs://${{ env.GCS_BUCKET }}/${PREFIX}*.json" || echo "No files found with prefix"
+
+  notify-on-pr:
+    name: PR Validation Summary
+    needs: [validate, detect-changes]
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const hasChanges = '${{ needs.detect-changes.outputs.has_changes }}' === 'true';
+            const changedFiles = '${{ needs.detect-changes.outputs.changed_files }}'.trim().split(' ').filter(f => f);
+
+            let body = '## Schema Validation Results\n\n';
+            body += '### Status: All validations passed!\n\n';
+
+            if (hasChanges) {
+              body += '### Changed Schemas:\n';
+              changedFiles.forEach(file => {
+                body += `- \`${file}\`\n`;
+              });
+              body += '\n';
+              body += '> These schemas will be synced to GCS when merged to main.\n';
+            } else {
+              body += '*No schema changes detected in this PR.*\n';
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  cleanup-branch-prefix:
+    name: Cleanup Branch Prefix on Delete
+    if: github.event_name == 'delete' && github.event.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Remove branch schemas from GCS
+        run: |
+          BRANCH_NAME="${{ github.event.ref }}"
+          SAFE_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9]/-/g' | sed 's/--*/-/g')
+          PREFIX="branches/${SAFE_BRANCH}/"
+
+          echo "Cleaning up GCS prefix: $PREFIX"
+          gsutil -m rm -r "gs://${{ env.GCS_BUCKET }}/${PREFIX}" || echo "No files to clean up"
