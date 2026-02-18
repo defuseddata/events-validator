@@ -19,3 +19,8 @@ schema_repo_owner      = "your-org"
 schema_repo_name       = "event-schemas"
 schema_repo_path       = "schemas"
 schema_repo_branch     = "main"
+
+# Security & Infrastructure Mode
+# true  = Creates a Classic Global Load Balancer (Costly ~$18/mo, but standard IAP)
+# false = Uses Cloud Run Direct Integration (Cheaper/Free , Preview feature) or pure Proxy
+use_classic_load_balancer = false
