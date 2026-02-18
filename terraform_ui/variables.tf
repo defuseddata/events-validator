@@ -88,3 +88,9 @@ variable "schema_repo_branch" {
   type        = string
   default     = "main"
 }
+
+variable "use_classic_load_balancer" {
+  description = "If true, creates a classic Global Load Balancer (costly). If false, uses Direct IAP Integration (Preview) or pure Proxy/IAM."
+  type        = bool
+  default     = false
+}

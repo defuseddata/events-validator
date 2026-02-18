@@ -94,16 +94,24 @@ resource "google_storage_bucket_iam_member" "github_actions_writer" {
 
 # --- Workload Identity Federation ---
 
+resource "random_id" "wif_suffix" {
+  byte_length = 4
+  keepers = {
+    # If the project changes, we definitely need a new pool
+    project_id = var.project_id
+  }
+}
+
 resource "google_iam_workload_identity_pool" "github_pool" {
-  workload_identity_pool_id = "gh-pool-v7"
-  display_name              = "GitHub Actions Pool v7"
+  workload_identity_pool_id = "gh-pool-${random_id.wif_suffix.hex}"
+  display_name              = "GitHub Actions Pool ${random_id.wif_suffix.hex}"
   description               = "Identity pool for GitHub Actions"
 }
 
 resource "google_iam_workload_identity_pool_provider" "github_provider" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.github_pool.workload_identity_pool_id
-  workload_identity_pool_provider_id = "gh-provider-v7"
-  display_name                       = "GitHub Provider v7"
+  workload_identity_pool_provider_id = "gh-provider-${random_id.wif_suffix.hex}"
+  display_name                       = "GitHub Provider ${random_id.wif_suffix.hex}"
   description                        = "OIDC Provider for GitHub Actions"
   
   # Explicit condition required by API to avoid "condition must reference claims" error

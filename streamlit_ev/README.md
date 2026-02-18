@@ -68,6 +68,25 @@ docker run -p 8080:8080 \
 
 ---
 
+## ☁️ Deployment Modes (IAP)
+
+The Terraform configuration supports two deployment modes for securing the application with Identity-Aware Proxy (IAP):
+
+### 1. Direct IAP Integration (Recommended / Default)
+*   **Cost**: Low/Free (No dedicated Load Balancer).
+*   **Architecture**: Uses Cloud Run's native IAP integration (Preview).
+*   **Pros**: Significant cost savings (~$18/mo saved), simpler infrastructure.
+*   **Cons**: Experimental feature (Preview)
+*   **Configuration**: `use_classic_load_balancer = false` in `terraform.tfvars`.
+
+### 2. Classic Load Balancer
+*   **Cost**: ~$18/month + traffic.
+*   **Architecture**: Full HTTPS Global Load Balancer + Serverless NEG.
+*   **Pros**: Production-grade GA feature, full visibility in Cloud Console, supports custom domains easily.
+*   **Cons**: Expensive for small internal tools.
+*   **Configuration**: `use_classic_load_balancer = true` in `terraform.tfvars`.
+
+
 ## ⚙️ Environment Variables
 
 | Variable | Description |

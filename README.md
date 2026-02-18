@@ -365,12 +365,21 @@ If you deployed using the steps above:
 
 ### Production Deployment (Cloud Run + IAP)
 
+### Production Deployment (Cloud Run + IAP)
+
 #### 1. Manual Prerequisites
 Before deploying to the cloud, you **must** configure the following using Google Cloud Console:
 1.  **[OAuth Consent Screen](https://console.cloud.google.com/apis/credentials/consent)**: Set to "Internal" and add `iap.googleapis.com` scope.
-2.  **[OAuth Client ID](https://console.cloud.google.com/apis/credentials)**: Create a "Web application" ID and add this **Authorized redirect URI**:
-    `https://iap.googleapis.com/v1/oauth/clientIds/YOUR_CLIENT_ID:handleRedirect` (Replace `YOUR_CLIENT_ID` with the actual ID).
+2.  **[OAuth Client ID](https://console.cloud.google.com/apis/credentials)**: Create a "Web application" ID.
 3.  **Update Config**: Add `iap_client_id`, `iap_client_secret`, and the list of `authorized_users` to your **`terraform_ui/terraform.tfvars`** file.
+
+> [!WARNING]
+> **Important for Direct IAP (Cloud Run Preview)**:
+> This project uses the new Identity-Aware Proxy integration directly on Cloud Run (Preview feature).
+> If you encounter `Error 400: redirect_uri_mismatch` after logging in, you **MUST** add the following to your OAuth Client ID's **Authorized redirect URIs**:
+> `https://<YOUR-CLOUD-RUN-URL>/_gcp_iap/authenticate`
+>
+> *(If you switched back to `use_classic_load_balancer = true`, use: `https://iap.googleapis.com/v1/oauth/clientIds/<YOUR_CLIENT_ID>:handleRedirect`)*
 
 > [!TIP]
 > **User Identity Format**: In the `authorized_users` list (within `terraform.tfvars`), ensure you use the proper prefix:
@@ -380,7 +389,8 @@ Before deploying to the cloud, you **must** configure the following using Google
 #### 2. Build and Deploy
 1.  **Build Image**:
     ```bash
-    gcloud builds submit --tag [REGION]-docker.pkg.dev/[PROJECT_ID]/event-validator-ui-repo/event-validator-ui:latest ./streamlit_ev
+    # Ensure you match the region defined in terraform.tfvars (e.g., europe-west1)
+    gcloud builds submit --region=europe-west1 --tag europe-west1-docker.pkg.dev/[PROJECT_ID]/event-validator-ui-repo/event-validator-ui:latest ./streamlit_ev
     ```
 2.  **Terraform Apply**:
     ```bash
@@ -397,7 +407,7 @@ Before deploying to the cloud, you **must** configure the following using Google
 - **Explorer**: Direct visibility and health-check analysis for your GCS schema bucket.
 - **Auto-Sync**: Propagate changes from the Repo to all GCS schemas with one click.
 - **Health Checks**: Automatically detect when GCS schemas are out of sync with your repository.
-- **Explorer**: Direct visibility into your GCS schema bucket.
+- **Direct IAP Integration**: Secure access using Google's native Cloud Run authentication (Preview).
 
 ---
 
