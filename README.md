@@ -186,11 +186,21 @@ Configure these flags in `terraform_backend/terraform.tfvars` to balance visibil
     *   [gcloud CLI](https://cloud.google.com/sdk/docs/install) (authenticated: `gcloud auth application-default login`)
 3.  **Local Node.js**: (Optional, for local testing) Node.js 20+.
 
-## 🔑 GCP Service Account Setup
+## 🔑 Authentication Methods
 
-You need a **Deployer Service Account** to run Terraform. **Never commit the `.json` key to Git.**
+You have two ways to authenticate Terraform:
 
-1.  Create a Service Account in the [IAM Console](https://console.cloud.google.com/iam-admin/serviceaccounts).
+### Standard Approach (Recommended)
+Simply log in with your Google account in the terminal. Terraform will automatically pick up your permissions (ADC). No `.json` keys required!
+```bash
+gcloud auth application-default login
+gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+```
+*(Note: Your personal account must have sufficient permissions, ideally `Editor` + `Project IAM Admin`)*
+
+### Legacy/CI Approach (Service Account Keys)
+If you are deploying via an automated CI/CD pipeline or strictly require a Service Account:
+1.  Create a Service Account in the IAM Console.
 2.  **Assign Roles**:
     *   `Editor` (Fastest for testing) **OR** the following specific roles:
         *   `API Keys Admin` (For Gateway security)
@@ -205,7 +215,8 @@ You need a **Deployer Service Account** to run Terraform. **Never commit the `.j
         *   `Service Management Administrator` & `Service Usage Admin` (To enable APIs automatically)
         *   `Storage Admin` (For logs and schemas)
     *   `Service Account User` (Always required for Terraform to deploy resources)
-3.  Generate a JSON key and save it as `terraform_backend/credentials.json` (and `terraform_ui/credentials.json` if deploying UI).
+3.  Generate a JSON key.
+4.  Uncomment `credentials_file` inside your `terraform.tfvars` files and point it to the downloaded JSON key (e.g. `credentials_file = "credentials.json"`). **Never commit the `.json` key to Git.**
 
 ---
 
@@ -245,17 +256,40 @@ To achieve a "Zero-Touch" experience, Terraform manages most configuration files
 
 ---
 
-## 🚀 Deployment (Terraform)
+## 📦 Deployment Using Wizard (Recommended for Mac/Linux)
+
+To make provisioning flawless and "Zero-Touch", we provide a unified Setup Wizard (`install.sh`) that dynamically configures endpoints, creates Git repositories, and runs Terraform for you without requiring JSON key downloads.
+
+### Step 0: Initial Requirements
+1.  **Authenticate your terminal users**:
+    *   GCP: `gcloud auth application-default login`
+    *   GitHub: `gh auth login`
+
+### Step 1: Run the Wizard
+Execute the installer from the root directory:
+```bash
+./install.sh
+```
+
+**The script will interactively:**
+1. Verify access to your desired GCP Project and compute regions.
+2. Bind Application Default Credentials to bypass limits safely (no `.json` required!).
+3. Automatically provision or connect an existing GitHub Repository for schemas.
+4. Auto-generate all required `.tfvars` securely without pushing them to Git.
+5. Deploy the backend and retrieve Gateway URLs.
+6. Gather OAuth credentials and fully deploy the UI via Cloud Build + Cloud Run.
+
+---
+
+## 🚀 Manual Deployment (Alternative / Windows)
 
 The infrastructure is split into two independent projects for flexibility:
 
 > [!IMPORTANT]
 > Before running `terraform apply`, you **must** create your own `terraform.tfvars` file from the provided example in each project directory. The `.tfvars` files contain sensitive configuration and are not committed to the repository.
 
-### Step 0: GitHub Preparation (Critical)
-1.  **Create a Repository**: Create a new, **empty** private repository on GitHub.
-    *   **Option A (Helper Script)**: Run `./scripts/create_repo.sh` to use an interactive wizard.
-    *   **Option B (Manual)**: Create it on GitHub.com. Do not initialize with README/.gitignore.
+### Step 0: GitHub Preparation (Optional, for GitOps)
+1.  **Create a Repository**: Create a new, **empty** private repository on GitHub.com. Do not initialize with README/.gitignore.
 2.  **Generate a Token**: Create a Personal Access Token (PAT).
     *   **Classic Token (Recommended)**: Select scopes `repo` (full control) and `workflow`.
     *   **Fine-grained Token**: Must have **Read and Write** access to:
@@ -266,21 +300,21 @@ The infrastructure is split into two independent projects for flexibility:
 
 ### Step 1: Deploy Backend (Required)
 
-```bash
-cd terraform_backend
+   ```bash
+   cd terraform_backend
 
 # Create your configuration file from the example
 cp terraform.tfvars.example terraform.tfvars
 
 # Edit terraform.tfvars with:
 # 1. Project details (project_id, region, location)
-# 2. GitHub Integration (github_token, schema_repo_owner, schema_repo_name)
+# 2. GitHub Integration (Optional: github_token, schema_repo_owner, schema_repo_name)
 #
 # IMPORTANT: Update all placeholder values before proceeding
 
-terraform init
-terraform apply
-```
+   terraform init
+   terraform apply
+   ```
 *(Note: The deployment includes a 60s delay to allow Google's API Gateway to propagate. Initial GA4 schemas will be pushed to your GitHub repository automatically.)*
 
 **Save the outputs** - you'll need them for the UI deployment:
@@ -292,8 +326,8 @@ terraform output bq_table
 
 ### Step 2: Deploy UI (Optional)
 
-```bash
-cd terraform_ui
+   ```bash
+   cd terraform_ui
 
 # Create your configuration file from the example
 cp terraform.tfvars.example terraform.tfvars
@@ -302,12 +336,12 @@ cp terraform.tfvars.example terraform.tfvars
 # 1. Project details (project_id, region)
 # 2. schemas_bucket (from backend outputs)
 # 3. IAP credentials (iap_client_id, iap_client_secret)
-# 4. GitHub Integration (github_token, schema_repo_owner, etc.) for UI capabilities
+# 4. GitHub Integration (Optional: github_token, schema_repo_owner, etc.) for UI capabilities
 # IMPORTANT: Update all placeholder values
 
-terraform init
-terraform apply
-```
+   terraform init
+   terraform apply
+   ```
 
 ---
 

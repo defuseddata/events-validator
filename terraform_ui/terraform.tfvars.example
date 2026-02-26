@@ -1,6 +1,8 @@
 project_id       = "your-project-id"
 region           = "europe-west1"
-credentials_file = "credentials.json"
+
+# (Optional) Service Account JSON key for manual deployments
+# credentials_file = "credentials.json"
 
 # Backend Integration (get these values from terraform_backend outputs)
 schemas_bucket = "event_validator_schemas_bucket-XXXXXXXX"
@@ -11,14 +13,20 @@ bq_table       = "event_data_table"
 iap_client_id     = "YOUR_CLIENT_ID"
 iap_client_secret = "YOUR_CLIENT_SECRET"
 authorized_users  = ["user:you@example.com"]
+
+# Scaling Configuration
+ui_min_instances  = 0
+ui_max_instances  = 2
+
 streamlit_image_tag = "latest"
 
 # --- GitHub Integration (Optional) ---
-github_token           = "ghp_xxxxxxxxxxxx"
-schema_repo_owner      = "your-org"
-schema_repo_name       = "event-schemas"
-schema_repo_path       = "schemas"
-schema_repo_branch     = "main"
+# If left empty, UI Dashboard will query only the GCS Bucket. 
+# github_token           = "ghp_xxxxxxxxxxxx"
+# schema_repo_owner      = "your-org"
+# schema_repo_name       = "event-schemas"
+# schema_repo_path       = "schemas"
+# schema_repo_branch     = "main"
 
 # Security & Infrastructure Mode
 # true  = Creates a Classic Global Load Balancer (Costly ~$18/mo, but standard IAP)

@@ -1,7 +1,9 @@
 project_id       = "your-project-id"
 region           = "europe-west1"
 location         = "EU"
-credentials_file = "credentials.json"
+
+# (Optional) Service Account JSON key for manual deployments
+# credentials_file = "credentials.json"
 
 # Cloud Function Source
 function_source_dir = "../validator_src"
@@ -18,9 +20,13 @@ LOG_PAYLOAD_WHEN_VALID_FLAG = false
 deletion_protection   = true
 force_destroy_buckets = false
 
-# --- GitHub Integration (GitOps) ---
-# Required for syncing schemas via Workload Identity Federation
-github_token             = "ghp_xxxxxxxxxxxxxxxxxxx"  # PAT with 'repo' and 'workflow' scope
-schema_repo_owner        = "your-github-username"
-schema_repo_name         = "event-schemas"
-enable_branch_protection = false # Set to true if you have GitHub Pro or a Public repo
+# Scaling Configuration
+backend_min_instances = 0
+backend_max_instances = 10
+
+# --- GitHub Integration (GitOps) (Optional) ---
+# If left empty, GitOps synchronization will be disabled.
+# github_token             = "ghp_xxxxxxxxxxxxxxxxxxx"  # PAT with 'repo' and 'workflow' scope
+# schema_repo_owner        = "your-org"
+# schema_repo_name         = "event-schemas"
+# enable_branch_protection = false # Set to true if you have GitHub Pro or a Public repo
