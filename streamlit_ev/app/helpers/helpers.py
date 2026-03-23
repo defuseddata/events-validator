@@ -76,7 +76,8 @@ def convert_export_to_internal(export):
             "regex": props.get("regex", ""),
             "description": props.get("description", ""),
             "optional": props.get("optional", False),
-            "validate_if_present": props.get("validate_if_present", "")
+            "validate_if_present": props.get("validate_if_present", ""),
+            "validate_if": props.get("validate_if", {})
         }
 
         # array
@@ -91,7 +92,8 @@ def convert_export_to_internal(export):
                     "regex": np.get("regex", ""),
                     "description": np.get("description", ""),
                     "optional": np.get("optional", False),
-                    "validate_if_present": np.get("validate_if_present", "")
+                    "validate_if_present": np.get("validate_if_present", ""),
+                    "validate_if": np.get("validate_if", {})
                 }
                 i += 1
             field["nestedSchema"] = nested
@@ -142,6 +144,8 @@ def export_schema():
             props["optional"] = True
         if field.get("validate_if_present"):
             props["validate_if_present"] = field["validate_if_present"]
+        if field.get("validate_if"):
+            props["validate_if"] = field.get("validate_if")
 
         if field["type"] != "array":
             val = field.get("value")
@@ -182,6 +186,8 @@ def export_schema():
                     np["optional"] = True
                 if nested.get("validate_if_present"):
                     np["validate_if_present"] = nested.get("validate_if_present")
+                if nested.get("validate_if"):
+                    np["validate_if"] = nested.get("validate_if")
                 
                 # Description
                 np["description"] = nested.get("description", "")
@@ -237,12 +243,13 @@ def render_field_row(field_id, field, prefix, on_delete=None):
         regex_val = ""
 
     elif type_val == "number":
-        try:
-            initial_val = float(field.get("value", 0))
-        except:
-            initial_val = 0.0
+        v = field.get("value")
+        initial_val = str(v) if v is not None and str(v).strip() != "" else ""
 
-        value_val = cols[2].number_input("Value (number)", value=initial_val, key=value_k)
+        value_val = cols[2].text_input("Value (number)", value=initial_val, placeholder="empty", key=value_k)
+        if isinstance(value_val, str) and value_val.strip() != "":
+            try: float(value_val)
+            except: cols[2].error("Invalid number", icon="⚠️")
         regex_val = ""
         cols[3].markdown("—")
 
@@ -463,6 +470,3 @@ def pretty_schema_inline(schema: dict) -> str:
         else:
             inline = json.dumps(value, ensure_ascii=False)
             lines.append(f'  "{key}": {inline}{comma}')
-
-    lines.append("}")
-    return "\n".join(lines)

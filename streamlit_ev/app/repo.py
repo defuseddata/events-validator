@@ -368,7 +368,12 @@ def newParamBuilder(param_id):
                     if p_data["type"] == "boolean":
                          p_data["value"] = cols[4].selectbox("Value", ["true", "false", "Any"], key=f"bp_val_{pid}", index=["true", "false", "Any"].index(str(p_data["value"]).lower()) if str(p_data["value"]).lower() in ["true", "false", "Any"] else 2)
                     elif p_data["type"] == "number":
-                         p_data["value"] = cols[4].number_input("Value", value=float(p_data["value"]) if p_data["value"] else 0.0, key=f"bp_val_{pid}")
+                         v = p_data.get("value")
+                         num_v = str(v) if v is not None and str(v).strip() != "" else ""
+                         p_data["value"] = cols[4].text_input("Value", value=num_v, placeholder="empty", key=f"bp_val_{pid}")
+                         if isinstance(p_data["value"], str) and p_data["value"].strip() != "":
+                             try: float(p_data["value"])
+                             except: cols[4].error("Invalid number", icon="⚠️")
                     else:
                          p_data["value"] = cols[4].text_input("Value", p_data["value"], key=f"bp_val_{pid}")
                 else:
@@ -397,7 +402,12 @@ def newParamBuilder(param_id):
                             if nf["type"] == "boolean":
                                 nf["value"] = r[3].selectbox("Value", ["true", "false", "Any"], key=f"bp_n_val_{pid}_{nid}", index=["true", "false", "Any"].index(str(nf.get("value", "Any")).lower()) if str(nf.get("value", "Any")).lower() in ["true", "false", "Any"] else 2)
                             elif nf["type"] == "number":
-                                nf["value"] = r[3].number_input("Value", value=float(nf.get("value", 0)) if nf.get("value") else 0.0, key=f"bp_n_val_{pid}_{nid}")
+                                v = nf.get("value")
+                                num_v = str(v) if v is not None and str(v).strip() != "" else ""
+                                nf["value"] = r[3].text_input("Value", value=num_v, placeholder="empty", key=f"bp_n_val_{pid}_{nid}")
+                                if isinstance(nf["value"], str) and nf["value"].strip() != "":
+                                    try: float(nf["value"])
+                                    except: r[3].error("Invalid number", icon="⚠️")
                             else:
                                 nf["value"] = r[3].text_input("Value", nf.get("value", ""), key=f"bp_n_val_{pid}_{nid}")
                         else:
@@ -429,6 +439,27 @@ def newParamBuilder(param_id):
                 errors.append(f"Parameter '{name}' already exists.")
                 continue
 
+            # validate numbers
+            ok_to_save = True
+            if p_data["type"] == "number" and p_data["mode"] == "Value":
+                val = p_data.get("value", "")
+                if isinstance(val, str) and val.strip() != "":
+                    try: float(val)
+                    except:
+                        errors.append(f"Parameter '{name}' has an invalid number.")
+                        ok_to_save = False
+            if p_data["type"] == "array":
+                for nf in p_data["nested"].values():
+                    if nf.get("type") == "number" and nf.get("mode", "Value") == "Value":
+                        val = nf.get("value", "")
+                        if isinstance(val, str) and val.strip() != "":
+                            try: float(val)
+                            except:
+                                errors.append(f"Nested field '{nf.get('key')}' in '{name}' has an invalid number.")
+                                ok_to_save = False
+            if not ok_to_save:
+                continue
+
             new_param = {
                 "type": p_data["type"],
                 "category": p_data["category"],
@@ -449,7 +480,8 @@ def newParamBuilder(param_id):
                              if nf["type"] == "number" and isinstance(val, str) and val.strip() != "":
                                   try: val = float(val) if "." in val else int(val)
                                   except: pass
-                             item["value"] = val
+                             if val is not None and str(val).strip() != "":
+                                 item["value"] = val
                         else:
                              item["regex"] = nf.get("regex")
                         constructed_nested[k] = item
@@ -460,7 +492,8 @@ def newParamBuilder(param_id):
                     if p_data["type"] == "number" and isinstance(val, str) and val.strip() != "":
                         try: val = float(val) if "." in val else int(val)
                         except: pass
-                    new_param["value"] = val
+                    if val is not None and str(val).strip() != "":
+                        new_param["value"] = val
                 else:
                     new_param["regex"] = p_data["regex"]
             
@@ -622,16 +655,25 @@ def edit_param_dialog(param_name):
                 curr_val_idx = opts.index(cv_str) if cv_str in opts else 2
                 new_value = st.selectbox("Value", opts, index=curr_val_idx, key=f"edit_{param_name}-value-bool")
             elif new_type == "number":
-                try:
-                    curr_num = float(current_value) if current_value else 0.0
-                except:
-                    curr_num = 0.0
-                new_value = st.number_input("Value", value=curr_num, key=f"edit_{param_name}-value-num")
+                num_k = f"edit_{param_name}-value-num"
+                if num_k in st.session_state:
+                    curr_num = st.session_state[num_k]
+                else:
+                    curr_num = str(current_value) if current_value is not None and str(current_value).strip() != "" else ""
+                new_value = st.text_input("Value", value=curr_num, placeholder="empty", key=num_k)
+                if isinstance(new_value, str) and new_value.strip() != "":
+                    try: float(new_value)
+                    except: st.error("Invalid number", icon="⚠️")
             else:
+                text_k = f"edit_{param_name}-value"
+                if text_k in st.session_state:
+                    curr_text = st.session_state[text_k]
+                else:
+                    curr_text = current_value if current_value else ""
                 new_value = st.text_input(
                     "Value",
-                    value=current_value if current_value else "",
-                    key=f"edit_{param_name}-value"
+                    value=curr_text,
+                    key=text_k
                 )
         else:
             new_regex = st.text_input("Regex Pattern", value=current_regex, key=f"edit_{param_name}-regex")
@@ -652,7 +694,12 @@ def edit_param_dialog(param_name):
                      cidx = opts.index(cval) if cval in opts else 2
                      nf["value"] = r[3].selectbox("Value", opts, index=cidx, key=f"ed_nv_{param_name}_{nid}")
                 elif nf["type"] == "number":
-                     nf["value"] = r[3].number_input("Value", value=float(nf.get("value", 0)) if nf.get("value") else 0.0, key=f"ed_nv_{param_name}_{nid}")
+                     v = nf.get("value")
+                     num_v = str(v) if v is not None and str(v).strip() != "" else ""
+                     nf["value"] = r[3].text_input("Value", value=num_v, placeholder="empty", key=f"ed_nv_{param_name}_{nid}")
+                     if isinstance(nf["value"], str) and nf["value"].strip() != "":
+                         try: float(nf["value"])
+                         except: r[3].error("Invalid number", icon="⚠️")
                 else:
                      nf["value"] = r[3].text_input("Value", nf.get("value", ""), key=f"ed_nv_{param_name}_{nid}")
                 nf.pop("regex", None)
@@ -688,6 +735,22 @@ def edit_param_dialog(param_name):
         else: new_value = ""
 
     if st.button("Save"):
+        if new_type == "number" and mode == "Fixed Value":
+             if isinstance(new_value, str) and new_value.strip() != "":
+                 try: float(new_value)
+                 except: 
+                     st.error("Invalid number format for value!")
+                     st.stop()
+        if new_type == "array":
+             for nf in st.session_state[nested_state_key].values():
+                 if nf.get("type") == "number" and nf.get("mode", "Value") == "Value":
+                     nv = nf.get("value", "")
+                     if isinstance(nv, str) and nv.strip() != "":
+                         try: float(nv)
+                         except:
+                             st.error(f"Invalid number format for nested key {nf.get('key', '')}")
+                             st.stop()
+
         draft_param_data = st.session_state.repo[param_name].copy()
         draft_param_data["type"] = new_type
         draft_param_data["category"] = new_category
@@ -707,7 +770,8 @@ def edit_param_dialog(param_name):
                          if nf.get("type") == "number" and isinstance(val, str) and val.strip() != "":
                               try: val = float(val) if "." in val else int(val)
                               except: pass
-                         item["value"] = val
+                         if val is not None and str(val).strip() != "":
+                             item["value"] = val
                      elif "regex" in nf:
                          item["regex"] = nf.get("regex")
                          
@@ -721,7 +785,10 @@ def edit_param_dialog(param_name):
                  if new_type == "number" and isinstance(new_value, str) and new_value.strip() != "":
                      try: final_val = float(new_value) if "." in new_value else int(new_value)
                      except: pass
-                 draft_param_data["value"] = final_val
+                 if final_val is not None and str(final_val).strip() != "":
+                     draft_param_data["value"] = final_val
+                 else:
+                     draft_param_data.pop("value", None)
                  draft_param_data.pop("regex", None)
              else:
                  draft_param_data["regex"] = new_regex
