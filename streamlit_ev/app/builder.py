@@ -119,42 +119,86 @@ def render_schema_param(field_id, field):
         
         # 1. Determine Current Mode
         current_mode = "Required (Always)"
-        if current_vip:
-             current_mode = "Conditional (Dependent)"
+        current_vi = field.get("validate_if", {})
+        
+        if current_vi and current_vi.get("field") and current_vi.get("value"):
+             current_mode = "Conditional (Required Value)"
+        elif current_vip:
+             current_mode = "Conditional (Dependent Present)"
         elif field.get("optional"):
              current_mode = "Optional"
              
-        mode_options = ["Required (Always)", "Optional", "Conditional (Dependent)"]
+        mode_options = ["Required (Always)", "Optional", "Conditional (Dependent Present)", "Conditional (Required Value)"]
         
         # 2. Render Mode Selector
         new_mode = st.radio("Validation Requirement", options=mode_options, index=mode_options.index(current_mode), key=f"mode_{field_id}", horizontal=True)
         
         # 3. Handle Conditional Dependency Input
         target_vip = ""
-        if new_mode == "Conditional (Dependent)":
-             # Show param selector
-             if current_vip and current_vip not in all_params:
-                 all_params.append(current_vip)
+        target_vi_val = ""
+        dep_type = "string"
+        
+        if new_mode in ["Conditional (Dependent Present)", "Conditional (Required Value)"]:
+             current_cond_param = current_vi.get("field", "") if new_mode == "Conditional (Required Value)" else current_vip
+             if current_cond_param and current_cond_param not in all_params:
+                 all_params.append(current_cond_param)
              
              p_opts = [""] + all_params
-             v_idx = p_opts.index(current_vip) if current_vip in p_opts else 0
-             target_vip = st.selectbox("Dependency Parameter", options=p_opts, index=v_idx, key=f"vip_sel_{field_id}", help="Validation runs ONLY if this parameter is present.")
+             v_idx = p_opts.index(current_cond_param) if current_cond_param in p_opts else 0
+             target_vip = st.selectbox("Dependency Parameter", options=p_opts, index=v_idx, key=f"vip_sel_{field_id}", help="Validation runs ONLY if this parameter meets the condition.")
              
+             if target_vip in repo:
+                 dep_type = repo[target_vip].get("type", "string")
+
              if not target_vip:
                  st.warning("⚠️ No dependency selected. This field will behave as 'Optional'.")
+                 
+             if new_mode == "Conditional (Required Value)" and target_vip:
+                  cv = current_vi.get("value", "")
+                  
+                  if dep_type == "boolean":
+                      bool_opts = ["true", "false"]
+                      cv_str = str(cv).lower() if not isinstance(cv, list) else str(cv[0]).lower()
+                      b_idx = bool_opts.index(cv_str) if cv_str in bool_opts else 0
+                      target_vi_val = st.selectbox("Expected Value (boolean)", bool_opts, index=b_idx, key=f"vi_val_{field_id}")
+                  elif dep_type == "number":
+                      try:
+                          c_val_num = float(cv[0] if isinstance(cv, list) else cv)
+                      except (ValueError, TypeError, IndexError):
+                          c_val_num = 0.0
+                      target_vi_val = st.number_input("Expected Value (number)", value=c_val_num, key=f"vi_val_{field_id}")
+                  else:
+                      if isinstance(cv, list):
+                          cv = ", ".join(cv)
+                      target_vi_val = st.text_input("Expected Value(s) (string) — comma separate for multiple", value=str(cv), key=f"vi_val_{field_id}")
         
         # 4. Update Schema State Logic
-        # Calculate new state based on Mode + VIP input
         new_is_opt = False
         new_vip_val = ""
+        new_vi_dict = {}
         
         if new_mode == "Optional":
              new_is_opt = True
-        elif new_mode == "Conditional (Dependent)":
-             new_is_opt = True # Conditional implies optional base
+        elif new_mode == "Conditional (Dependent Present)":
+             new_is_opt = True 
              new_vip_val = target_vip
+        elif new_mode == "Conditional (Required Value)":
+             new_is_opt = True
+             if target_vip and str(target_vi_val).strip() != "":
+                 if dep_type == "number":
+                     try:
+                         val_to_save = float(target_vi_val) if "." in str(target_vi_val) else int(target_vi_val)
+                     except:
+                         val_to_save = target_vi_val
+                 elif dep_type == "boolean":
+                     val_to_save = True if str(target_vi_val).lower() == "true" else False
+                 else:
+                     parsed = [v.strip() for v in str(target_vi_val).split(",") if v.strip()]
+                     val_to_save = parsed[0] if len(parsed) == 1 else parsed
+                     
+                 if val_to_save is not None and str(val_to_save).strip() != "":
+                     new_vi_dict = {"field": target_vip, "value": val_to_save}
              
-        # Apply changes if anything diff
         has_changed = False
         if field.get("optional", False) != new_is_opt:
              field["optional"] = new_is_opt
@@ -164,12 +208,19 @@ def render_schema_param(field_id, field):
              field["validate_if_present"] = new_vip_val
              has_changed = True
              
+        if str(field.get("validate_if", {})) != str(new_vi_dict):
+             if new_vi_dict:
+                 field["validate_if"] = new_vi_dict
+             else:
+                 field.pop("validate_if", None)
+             has_changed = True
+             
         if has_changed:
              st.session_state.schema[field_id] = field
              st.rerun()
 
         # Resolution Actions (Dependency Missing check)
-        new_vip = field.get("validate_if_present", "")
+        new_vip = field.get("validate_if_present", "") or field.get("validate_if", {}).get("field", "")
         if new_vip:
              dep_field = next((f for f in st.session_state.schema.values() if f.get("key") == new_vip), None)
 
@@ -289,38 +340,86 @@ def render_array_param(field_id, field):
              # UX SIMPLIFICATION (Nested)
              # 1. Determine Mode
              n_mode = "Required (Always)"
-             if n_vip:
-                  n_mode = "Conditional (Dependent)"
+             n_vi = nf.get("validate_if", {})
+             
+             if n_vi and n_vi.get("field") and n_vi.get("value"):
+                  n_mode = "Conditional (Required Value)"
+             elif n_vip:
+                  n_mode = "Conditional (Dependent Present)"
              elif nf.get("optional"):
                   n_mode = "Optional"
              
-             n_opts = ["Required (Always)", "Optional", "Conditional (Dependent)"]
+             n_opts = ["Required (Always)", "Optional", "Conditional (Dependent Present)", "Conditional (Required Value)"]
              new_n_mode = st.radio("Validation Requirement", options=n_opts, index=n_opts.index(n_mode), key=f"n_mode_{field_id}_{nid}", horizontal=True)
              
              # 2. Dependency Input
              n_target_vip = ""
-             if new_n_mode == "Conditional (Dependent)":
+             n_target_vi_val = ""
+             n_dep_type = "string"
+             
+             if new_n_mode in ["Conditional (Dependent Present)", "Conditional (Required Value)"]:
                  repo = st.session_state.get("repo", {})
                  all_params_n = sorted(list(repo.keys()))
-                 if n_vip and n_vip not in all_params_n:
-                     all_params_n.append(n_vip)
+                 n_current_cond_param = n_vi.get("field", "") if new_n_mode == "Conditional (Required Value)" else n_vip
+                 
+                 if n_current_cond_param and n_current_cond_param not in all_params_n:
+                     all_params_n.append(n_current_cond_param)
                  
                  np_opts = [""] + all_params_n
-                 nvip_idx = np_opts.index(n_vip) if n_vip in np_opts else 0
+                 nvip_idx = np_opts.index(n_current_cond_param) if n_current_cond_param in np_opts else 0
                  n_target_vip = st.selectbox("Dependency Parameter", options=np_opts, index=nvip_idx, key=f"n_vip_sel_{field_id}_{nid}")
+
+                 if n_target_vip in repo:
+                     n_dep_type = repo[n_target_vip].get("type", "string")
 
                  if not n_target_vip:
                      st.warning("⚠️ No dependency selected. This field will behave as 'Optional'.")
+                     
+                 if new_n_mode == "Conditional (Required Value)" and n_target_vip:
+                      ncv = n_vi.get("value", "")
+                      
+                      if n_dep_type == "boolean":
+                          n_bool_opts = ["true", "false"]
+                          ncv_str = str(ncv).lower() if not isinstance(ncv, list) else str(ncv[0]).lower()
+                          nb_idx = n_bool_opts.index(ncv_str) if ncv_str in n_bool_opts else 0
+                          n_target_vi_val = st.selectbox("Expected Value (boolean)", n_bool_opts, index=nb_idx, key=f"n_vi_val_{field_id}_{nid}")
+                      elif n_dep_type == "number":
+                          try:
+                              n_val_num = float(ncv[0] if isinstance(ncv, list) else ncv)
+                          except (ValueError, TypeError, IndexError):
+                              n_val_num = 0.0
+                          n_target_vi_val = st.number_input("Expected Value (number)", value=n_val_num, key=f"n_vi_val_{field_id}_{nid}")
+                      else:
+                          if isinstance(ncv, list):
+                              ncv = ", ".join(ncv)
+                          n_target_vi_val = st.text_input("Expected Value(s) (string) — comma separate for multiple", value=str(ncv), key=f"n_vi_val_{field_id}_{nid}")
 
              # 3. Update Logic
              n_new_opt = False
              n_new_vip_val = ""
+             n_new_vi_dict = {}
              
              if new_n_mode == "Optional":
                   n_new_opt = True
-             elif new_n_mode == "Conditional (Dependent)":
+             elif new_n_mode == "Conditional (Dependent Present)":
                   n_new_opt = True
                   n_new_vip_val = n_target_vip
+             elif new_n_mode == "Conditional (Required Value)":
+                  n_new_opt = True
+                  if n_target_vip and str(n_target_vi_val).strip() != "":
+                      if n_dep_type == "number":
+                          try:
+                              n_val_to_save = float(n_target_vi_val) if "." in str(n_target_vi_val) else int(n_target_vi_val)
+                          except:
+                              n_val_to_save = n_target_vi_val
+                      elif n_dep_type == "boolean":
+                          n_val_to_save = True if str(n_target_vi_val).lower() == "true" else False
+                      else:
+                          n_parsed = [v.strip() for v in str(n_target_vi_val).split(",") if v.strip()]
+                          n_val_to_save = n_parsed[0] if len(n_parsed) == 1 else n_parsed
+                          
+                      if n_val_to_save is not None and str(n_val_to_save).strip() != "":
+                          n_new_vi_dict = {"field": n_target_vip, "value": n_val_to_save}
              
              n_changed = False
              if nf.get("optional", False) != n_new_opt:
@@ -329,13 +428,19 @@ def render_array_param(field_id, field):
              if nf.get("validate_if_present", "") != n_new_vip_val:
                   nf["validate_if_present"] = n_new_vip_val
                   n_changed = True
+             if str(nf.get("validate_if", {})) != str(n_new_vi_dict):
+                  if n_new_vi_dict:
+                      nf["validate_if"] = n_new_vi_dict
+                  else:
+                      nf.pop("validate_if", None)
+                  n_changed = True
              
              if n_changed:
                   st.session_state.schema[field_id]["nestedSchema"][nid] = nf
                   st.rerun()
 
              # Warning Checks
-             n_new_vip = nf.get("validate_if_present", "")
+             n_new_vip = nf.get("validate_if_present", "") or nf.get("validate_if", {}).get("field", "")
 
              if n_new_vip:
                   dep_field_n = next((f for f in st.session_state.schema.values() if f.get("key") == n_new_vip), None)

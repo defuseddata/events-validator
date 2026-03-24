@@ -137,6 +137,7 @@ function checkWithSchema(schemaObject, dataToValidate, parentPath = '', eventNam
 
 		const rule = schemaObject[key];
 		const fieldPath = parentPath ? `${parentPath}.${key}` : key;
+		const isOptional = rule.optional === true || rule.required === false;
 		if (rule.validate_if_present) {
             if (typeof getByPathFn === 'function') {
                 const targetValue = getByPathFn(_root, rule.validate_if_present);
@@ -144,20 +145,51 @@ function checkWithSchema(schemaObject, dataToValidate, parentPath = '', eventNam
                     continue;
                 }
                 if (!Object.prototype.hasOwnProperty.call(dataToValidate, key)) {
-                     logError(
-                        fieldPath, 
-                        'missing_conditional', 
-                        'field present', 
-                        'field missing', 
-                        eventName, _root, eventId
-                     );
+                     if (!isOptional) {
+                         logError(
+                            fieldPath, 
+                            'missing_conditional', 
+                            'field present', 
+                            'field missing', 
+                            eventName, _root, eventId
+                         );
+                     }
+                     continue;
+                }
+            }
+		}
+
+		if (rule.validate_if) {
+            if (typeof getByPathFn === 'function') {
+                const conditionField = rule.validate_if.field;
+                const expectedValues = Array.isArray(rule.validate_if.value) 
+                                       ? rule.validate_if.value 
+                                       : [rule.validate_if.value];
+                
+                const targetValue = getByPathFn(_root, conditionField);
+                const isMatch = expectedValues.some(val => targetValue?.toString() === val?.toString());
+
+                if (!isMatch) {
+                    continue;
+                }
+                
+                if (!Object.prototype.hasOwnProperty.call(dataToValidate, key)) {
+                     if (!isOptional) {
+                         logError(
+                            fieldPath, 
+                            'missing_conditional', 
+							 // `field present,${conditionField}=${targetValue}`, 
+							'field present',
+                            'field missing', 
+                            eventName, _root, eventId
+                         );
+                     }
                      continue;
                 }
             }
 		}
 
 		const hasKey = Object.prototype.hasOwnProperty.call(dataToValidate, key);
-		const isOptional = rule.optional === true || rule.required === false;
 
 		if (!hasKey) {
 			if (isOptional) continue;
