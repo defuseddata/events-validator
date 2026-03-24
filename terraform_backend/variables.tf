@@ -9,8 +9,9 @@ variable "region" {
 }
 
 variable "credentials_file" {
-  description = "The name of the credentials file."
+  description = "Path to the service account JSON key for manual deployments. If empty, Application Default Credentials will be used."
   type        = string
+  default     = ""
 }
 
 variable "function_source_dir" {
@@ -63,4 +64,16 @@ variable "force_destroy_buckets" {
   description = "Allow deletion of buckets even if they contain objects"
   type        = bool
   default     = false
+}
+
+variable "backend_min_instances" {
+  description = "Minimum number of instances for the Cloud Function"
+  type        = number
+  default     = 0
+}
+
+variable "backend_max_instances" {
+  description = "Maximum number of instances for the Cloud Function"
+  type        = number
+  default     = 10
 }

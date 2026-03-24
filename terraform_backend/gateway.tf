@@ -59,7 +59,7 @@ locals {
 resource "google_api_gateway_api_config" "api_cfg" {
   provider = google-beta
   api = google_api_gateway_api.gateway.api_id
-  api_config_id = "config-${substr(md5(local.rendered_openapi), 0, 6)}" #compare content hash to avoid duplicates
+  api_config_id_prefix = "api-cfg-"
 
   openapi_documents {
     document {

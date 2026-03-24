@@ -9,8 +9,9 @@ variable "region" {
 }
 
 variable "credentials_file" {
-  description = "The name of the credentials file."
+  description = "Path to the service account JSON key for manual deployments. If empty, Application Default Credentials will be used."
   type        = string
+  default     = ""
 }
 
 # --- Backend Integration ---
@@ -93,4 +94,16 @@ variable "use_classic_load_balancer" {
   description = "If true, creates a classic Global Load Balancer (costly). If false, uses Direct IAP Integration (Preview) or pure Proxy/IAM."
   type        = bool
   default     = false
+}
+
+variable "ui_min_instances" {
+  description = "Minimum number of instances for the Streamlit UI"
+  type        = number
+  default     = 0
+}
+
+variable "ui_max_instances" {
+  description = "Maximum number of instances for the Streamlit UI"
+  type        = number
+  default     = 2
 }

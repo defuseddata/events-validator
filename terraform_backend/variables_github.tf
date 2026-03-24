@@ -2,16 +2,19 @@ variable "github_token" {
   description = "GitHub Personal Access Token"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "schema_repo_owner" {
   description = "Owner of the schema repository"
   type        = string
+  default     = ""
 }
 
 variable "schema_repo_name" {
   description = "Name of the schema repository"
   type        = string
+  default     = ""
 }
 
 variable "enable_branch_protection" {

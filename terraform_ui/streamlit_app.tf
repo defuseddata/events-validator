@@ -3,6 +3,7 @@ resource "google_artifact_registry_repository" "streamlit_repo" {
   repository_id = "event-validator-ui-repo"
   description   = "Docker repository for Streamlit UI"
   format        = "DOCKER"
+  depends_on    = [google_project_service.required_services]
 }
 
 resource "google_cloud_run_v2_service" "streamlit_ui" {
@@ -16,8 +17,8 @@ resource "google_cloud_run_v2_service" "streamlit_ui" {
   
   template {
     scaling {
-      min_instance_count = 0
-      max_instance_count = 1
+      min_instance_count = var.ui_min_instances
+      max_instance_count = var.ui_max_instances
     }
     service_account = google_service_account.streamlit_worker.email
     containers {
