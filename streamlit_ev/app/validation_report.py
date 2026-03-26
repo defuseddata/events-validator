@@ -17,7 +17,7 @@ BQ_PROJECT = os.environ.get("GCP_PROJECT")
 BQ_DATASET = os.environ.get("BQ_DATASET", "event_data_dataset")
 BQ_TABLE = os.environ.get("BQ_TABLE", "event_data_table")
 
-def fetch_data(start_date, end_date):
+def fetch_data(start_date, end_date) -> pl.DataFrame:
     client = get_bq_client()
     if not client:
         return pl.DataFrame()
@@ -51,7 +51,10 @@ def fetch_data(start_date, end_date):
     try:
         # Fetch data as Arrow table and convert to Polars DataFrame
         arrow_table = client.query(query, job_config=job_config).to_arrow()
-        return pl.from_arrow(arrow_table)
+        df = pl.from_arrow(arrow_table)
+        if isinstance(df, pl.Series):
+             return df.to_frame()
+        return df
     except Exception as e:
         st.error(f"Error fetching data from BigQuery: {e}")
         return pl.DataFrame()

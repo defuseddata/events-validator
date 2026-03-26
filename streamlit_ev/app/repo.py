@@ -118,15 +118,16 @@ def render_repo():
             with st.expander(exp_label, expanded=False):
                 cols = st.columns([2,2])
 
-                table = pd.DataFrame([
+                table = pd.DataFrame(data=[
                     ["Type", str(param.get("type", ""))],
                     ["Default Value", str(param.get("value", ""))],
                     ["Category", str(param.get("category", ""))],
                     ["Description", str(param.get("description", ""))],
                     ["Used In", json.dumps(param.get("usedInSchemas", ""))],
-                ], columns=["Field", "Value"])
+                ], columns=pd.Index(["Field", "Value"]))
 
                 with cols[0]:
+                    # Type hint to help Pyright
                     st.table(table.set_index("Field"))
                 with cols[1]:
                     st.json(param, expanded=False)
@@ -141,7 +142,7 @@ def render_repo():
             st.session_state.show_new_param_builder = False
             # cleanup stanu buildera
             for key in list(st.session_state.keys()):
-                if key.startswith("repo_") or key.startswith("custom_cat_"):
+                if isinstance(key, str) and (key.startswith("repo_") or key.startswith("custom_cat_")):
                     del st.session_state[key]
 
             st.session_state.pop("new_nested", None)
@@ -248,48 +249,6 @@ def delete_nested_edit(param_name, nid):
     key = f"edit_nested_{param_name}"
     if key in st.session_state and nid in st.session_state[key]:
         del st.session_state[key][nid]
-
-
-    name = cols[0].text_input("Parameter name", key=f"repo_key_{param_id}")
-    type_val = cols[1].selectbox(
-        "Type",
-        typeOptions,
-        key=f"repo_type_{param_id}"
-    )
-    # Category selection
-    category = cols[2].selectbox(
-        "Category",
-        get_available_categories(),
-        key=f"repo_cat_{param_id}",
-        accept_new_options=True,
-        placeholder="choose or fill in new category"
-    )
-
-    # If user selects Custom → show text input
-    # if category == "Custom":
-    #     custom_value = cols[2].text_input(
-    #         "Custom category",
-    #         placeholder="Enter custom category name",
-    #         key=f"custom_cat_{param_id}"
-    #     )
-    #     category = custom_value or "Custom"
-
-    value = None
-    if type_val == "boolean":
-        value = cols[3].selectbox("Default Value", key=f"repo_val_{param_id}", options=["true", "false", "Any"])
-    elif type_val == "number":
-        value = cols[3].text_input("Default Value (number)", key=f"repo_val_{param_id}", placeholder="e.g. 1.0 or leave empty")
-    elif type_val != "array":
-        value = cols[3].text_input("Default Value", key=f"repo_val_{param_id}")
-    else:
-        st.info(f"Now You are creating an Array parameter: {name or 'no name'}. Add nested fields below:")
-
-
-    description = cols[4].text_area(
-        "Description",
-        key=f"repo_desc_{param_id}",
-        placeholder="Describe what this parameter means, how it's used, constraints, notes…"
-    )
 
 def add_bulk_param():
     if "bulk_params" not in st.session_state:
@@ -448,8 +407,8 @@ def newParamBuilder(param_id):
                     except:
                         errors.append(f"Parameter '{name}' has an invalid number.")
                         ok_to_save = False
-            if p_data["type"] == "array":
-                for nf in p_data["nested"].values():
+            if p_data.get("type") == "array":
+                for nf in p_data.get("nested", {}).values():
                     if nf.get("type") == "number" and nf.get("mode", "Value") == "Value":
                         val = nf.get("value", "")
                         if isinstance(val, str) and val.strip() != "":
@@ -466,18 +425,18 @@ def newParamBuilder(param_id):
                 "description": p_data["description"]
             }
 
-            if p_data["type"] == "array":
+            if p_data.get("type") == "array":
                 constructed_nested = {}
-                for nf in p_data["nested"].values():
-                    k = nf["key"].strip()
+                for nf in p_data.get("nested", {}).values():
+                    k = nf.get("key", "").strip()
                     if k:
                         item = {
-                            "type": nf["type"],
+                            "type": nf.get("type", "string"),
                             "description": nf.get("description", "")
                         }
-                        if nf["mode"] == "Value":
+                        if nf.get("mode", "Value") == "Value":
                              val = nf.get("value")
-                             if nf["type"] == "number" and isinstance(val, str) and val.strip() != "":
+                             if nf.get("type", "string") == "number" and isinstance(val, str) and val.strip() != "":
                                   try: val = float(val) if "." in val else int(val)
                                   except: pass
                              if val is not None and str(val).strip() != "":
@@ -515,10 +474,6 @@ def newParamBuilder(param_id):
         elif not errors:
              st.warning("No valid parameters to save.")
 
-def paramEditor(param):
-    with st.dialog(title="test"):
-        st.button("test")
-        st.json(param)
 
 @st.dialog("Confirm Schema Updates", width="large")
 def confirm_update_dialog(full_schema_map, param_name):
@@ -567,7 +522,7 @@ def confirm_update_dialog(full_schema_map, param_name):
         if "master_toggle_schemas" in st.session_state:
             del st.session_state.master_toggle_schemas
         for k in list(st.session_state.keys()):
-            if k.startswith("chk_"):
+            if isinstance(k, str) and k.startswith("chk_"):
                 del st.session_state[k]
 
     st.markdown("---")
