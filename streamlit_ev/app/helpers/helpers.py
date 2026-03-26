@@ -20,7 +20,7 @@ def next_id_for_schema():
     for k in schema.keys():
         try:
             ids.append(int(k))
-        except:
+        except (ValueError, TypeError):
             pass
     return max(ids) + 1 if ids else 2
 
@@ -151,8 +151,10 @@ def export_schema():
             val = field.get("value")
             if val not in ("", None, [], "Any"):
                 if field["type"] == "number" and isinstance(val, str):
-                    try: val = float(val) if "." in val else int(val)
-                    except: pass
+                    try:
+                        val = float(val) if "." in val else int(val)
+                    except (ValueError, TypeError):
+                        pass
                 props["value"] = val
             
             if field.get("regex") not in ("", None, []):
@@ -177,8 +179,10 @@ def export_schema():
                 nv = nested.get("value")
                 if nv not in ("", None, [], "Any"):
                     if nested.get("type") == "number" and isinstance(nv, str):
-                        try: nv = float(nv) if "." in nv else int(nv)
-                        except: pass
+                        try:
+                            nv = float(nv) if "." in nv else int(nv)
+                        except (ValueError, TypeError):
+                            pass
                     np["value"] = nv
                 
                 # Add Optional & Conditional (Nested)
@@ -248,8 +252,10 @@ def render_field_row(field_id, field, prefix, on_delete=None):
 
         value_val = cols[2].text_input("Value (number)", value=initial_val, placeholder="empty", key=value_k)
         if isinstance(value_val, str) and value_val.strip() != "":
-            try: float(value_val)
-            except: cols[2].error("Invalid number", icon="⚠️")
+            try:
+                float(value_val)
+            except ValueError:
+                cols[2].error("Invalid number", icon="⚠️")
         regex_val = ""
         cols[3].markdown("—")
 
@@ -343,17 +349,13 @@ def render_array_field(field_id, field, prefix, on_delete_field, update_schema):
 # REPO → INTERNAL FORMAT
 def convert_repo_param_to_internal(param_name: str, param_obj: dict):
 
-    field = {}
-    field["key"] = param_name
-    field["type"] = param_obj.get("type", "")
-    field["description"] = param_obj.get("description", "")
-
-    if field["type"] != "array":
-        field["value"] = param_obj.get("value", "")
-        field["regex"] = param_obj.get("regex", "")
-    else:
-        field["value"] = ""
-        field["regex"] = ""
+    field = {
+        "key": param_name,
+        "type": param_obj.get("type", ""),
+        "description": param_obj.get("description", ""),
+        "value": param_obj.get("value", "") if param_obj.get("type") != "array" else "",
+        "regex": param_obj.get("regex", "") if param_obj.get("type") != "array" else ""
+    }
 
     nested_src = param_obj.get("nestedSchema") or {}
     if isinstance(nested_src, dict) and nested_src:
@@ -438,9 +440,7 @@ def render_param_compact(param: dict, indent: int = 2) -> str:
         k: v for k, v in param.items() if k != "nestedSchema"
     }
 
-    inline_json = json.dumps(inline_parts, ensure_ascii=False)
-    inline_json = inline_json[:-1]  # usuń końcową }
-
+    inline_json = json.dumps(inline_parts, ensure_ascii=False).rstrip("}")
     lines.append(f"{inline_json},")
     lines.append(f'{indent_str}"nestedSchema": {{')
 
@@ -470,3 +470,6 @@ def pretty_schema_inline(schema: dict) -> str:
         else:
             inline = json.dumps(value, ensure_ascii=False)
             lines.append(f'  "{key}": {inline}{comma}')
+    
+    lines.append("}")
+    return "\n".join(lines)
