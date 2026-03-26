@@ -143,11 +143,22 @@ while true; do
     REGION=${INPUT_REGION:-europe-west1}
 
     echo "Verifying if Region '$REGION' is valid..."
-    if gcloud compute regions describe "$REGION" --project="$PROJECT_ID" &> /dev/null; then
+    # Use a temporary file to capture error messages from gcloud
+    REGION_ERROR=$(gcloud compute regions describe "$REGION" --project="$PROJECT_ID" 2>&1 > /dev/null || true)
+
+    if [ -z "$REGION_ERROR" ]; then
         echo -e "${GREEN}✓ Region '$REGION' verified.${NC}"
         break
     else
-        echo -e "${RED}Error: Region '$REGION' is invalid or not available in this project.${NC}"
+        echo -e "${RED}Error: Region '$REGION' could not be verified.${NC}"
+        echo -e "${YELLOW}Reason: $REGION_ERROR${NC}"
+        
+        if [[ "$REGION_ERROR" == *"billing-enabled"* ]] || [[ "$REGION_ERROR" == *"BILLING_NOT_FOUND"* ]]; then
+            echo -e "${RED}CRITICAL: Billing is not enabled for project '$PROJECT_ID'.${NC}"
+            echo -e "${YELLOW}Please visit https://console.cloud.google.com/billing and link a billing account to proceed.${NC}"
+            exit 1
+        fi
+        
         echo -e "${YELLOW}Please enter a valid GCP region (e.g., europe-west1, us-central1).${NC}"
     fi
 done

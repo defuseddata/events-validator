@@ -180,8 +180,9 @@ Configure these flags in `terraform_backend/terraform.tfvars` to balance visibil
 
 ## 🛠 Prerequisites
 
-1.  **GCP Project**: An active Google Cloud Project.
-2.  **Tools**:
+1.  **GCP Project**: An active Google Cloud Project with **[Billing Account linked](https://console.cloud.google.com/billing)**.
+    *   *Crucial*: Many APIs (Compute, Cloud Build, API Gateway) will fail to activate or describe without an active billing account, causing the installer to hang or error.
+3.  **Tools**:
     *   [Terraform](https://developer.hashicorp.com/terraform/downloads) (>= 1.5.0)
     *   [gcloud CLI](https://cloud.google.com/sdk/docs/install) (authenticated: `gcloud auth application-default login`)
 3.  **Local Node.js**: (Optional, for local testing) Node.js 20+.
