@@ -1,6 +1,6 @@
 resource "google_api_gateway_api" "gateway" {
-    api_id = "my-api"
-    display_name = "api-gateway"
+    api_id = "dd-ev-api-gateway"
+    display_name = "dd-ev-api-gateway"
     provider = google-beta
     depends_on = [
         google_project_service.required_services["cloudfunctions.googleapis.com"]
@@ -75,7 +75,7 @@ locals {
 resource "google_api_gateway_api_config" "api_cfg" {
   provider = google-beta
   api = google_api_gateway_api.gateway.api_id
-  api_config_id_prefix = "api-cfg-"
+  api_config_id_prefix = "dd-ev-gateway-api-cfg-"
 
   openapi_documents {
     document {
@@ -97,10 +97,10 @@ resource "google_api_gateway_api_config" "api_cfg" {
 resource "google_api_gateway_gateway" "api_gateway" {
   provider = google-beta
   api_config = google_api_gateway_api_config.api_cfg.id
-  gateway_id = "my-gateway"
+  gateway_id = "dd-ev-api-gateway"
   region = var.region
   project = var.project_id
-  display_name = "My Gateway"
+  display_name = "DD Events Validator API Gateway"
 }
 
 data "google_project" "project" {
