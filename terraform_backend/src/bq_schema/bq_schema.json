@@ -58,5 +58,10 @@
     "name": "type",
     "type": "STRING",
     "mode": "NULLABLE"
+  },
+  {
+    "name": "date_utc",
+    "type": "DATE",
+    "mode": "NULLABLE"
   }
 ]

@@ -14,8 +14,6 @@ paths:
       operationId: eventsValidator
       x-google-backend:
         address: ${run_uri}
-        jwt_audience: ${run_uri}
-
       security:
         - api_key: [${api_key}]
       parameters:
