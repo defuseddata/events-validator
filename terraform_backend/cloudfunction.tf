@@ -59,4 +59,11 @@ resource "google_cloudfunctions2_function" "function" {
       LOG_PAYLOAD_WHEN_VALID = var.LOG_PAYLOAD_WHEN_VALID_FLAG
     }
   }
+  
+  depends_on = [
+    google_project_service.required_services["cloudfunctions.googleapis.com"],
+    google_project_service.required_services["run.googleapis.com"],
+    google_project_service.required_services["cloudbuild.googleapis.com"],
+    google_project_service.required_services["storage.googleapis.com"],
+  ]
 }

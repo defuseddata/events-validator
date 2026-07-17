@@ -13,7 +13,7 @@ resource "google_cloud_run_v2_service" "streamlit_ui" {
   ingress      = var.use_classic_load_balancer ? "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER" : "INGRESS_TRAFFIC_ALL"
   launch_stage = var.use_classic_load_balancer ? "GA" : "BETA"
   iap_enabled  = var.use_classic_load_balancer ? false : true
-  depends_on = [google_artifact_registry_repository.streamlit_repo]
+  depends_on   = [google_artifact_registry_repository.streamlit_repo]
   
   template {
     scaling {
