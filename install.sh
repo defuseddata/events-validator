@@ -158,7 +158,7 @@ while true; do
             continue
         fi
         echo ""
-        echo -e "${BLUE}Checking IAM permissions on '$PROJECT_ID' for $(gcloud config get-value account 2>/dev/null)...${NC}"
+        echo -e "${BLUE}Checking IAM permissions on '$PROJECT_ID' for ADC account ${ADC_EMAIL:-$(gcloud config get-value account 2>/dev/null)}...${NC}"
 
         REQUIRED_PERMISSIONS=(
             "serviceusage.services.enable"
@@ -187,7 +187,7 @@ while true; do
             -d "$REQUEST_BODY" \
             "https://cloudresourcemanager.googleapis.com/v1/projects/${PROJECT_ID}:testIamPermissions" 2>&1) || true
 
-        if [ -z "$RESPONSE" ] || echo "$RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+        if [ -z "$RESPONSE" ] || ! echo "$RESPONSE" | jq -e . > /dev/null 2>&1 || echo "$RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
             echo -e "${YELLOW}Warning: could not run the permission check.${NC}"
             if [ -n "$RESPONSE" ]; then
                 echo "$RESPONSE" | jq -r '.error.message // .' 2>/dev/null || echo "$RESPONSE"
@@ -208,7 +208,7 @@ while true; do
                     echo "   - $p"
                 done
                 echo -e "${YELLOW}You likely need the Owner or Editor role on this project (see README.md for the full breakdown). Ask a project admin, or if you're allowed to self-grant:${NC}"
-                echo -e "${CYAN}  gcloud projects add-iam-policy-binding $PROJECT_ID --member=\"user:$(gcloud config get-value account)\" --role=\"roles/editor\"${NC}"
+                echo -e "${CYAN}  gcloud projects add-iam-policy-binding $PROJECT_ID --member=\"user:${ADC_EMAIL:-$(gcloud config get-value account 2>/dev/null)}\" --role=\"roles/editor\"${NC}"
                 read -p "Continue anyway? (y/N) " CONTINUE_WITHOUT_PERMS
                 if [[ ! "$CONTINUE_WITHOUT_PERMS" =~ ^[Yy] ]]; then
                     exit 1
@@ -219,7 +219,14 @@ while true; do
         fi
 
         echo -e "${YELLOW}Enabling foundational GCP APIs for Terraform... (this takes ~15 seconds)${NC}"
-        gcloud services enable cloudresourcemanager.googleapis.com serviceusage.googleapis.com iam.googleapis.com iap.googleapis.com cloudbuild.googleapis.com --project="$PROJECT_ID" --quiet < /dev/null
+        if ! gcloud services enable cloudresourcemanager.googleapis.com serviceusage.googleapis.com iam.googleapis.com iap.googleapis.com cloudbuild.googleapis.com --project="$PROJECT_ID" --quiet < /dev/null; then
+            echo -e "${RED}✗ Failed to enable foundational APIs.${NC}"
+            echo -e "${YELLOW}Common causes:${NC}"
+            echo -e "  - Billing is not enabled on project '$PROJECT_ID'"
+            echo -e "  - You lack the 'serviceusage.services.enable' permission"
+            echo -e "${YELLOW}Please resolve these issues and try again.${NC}"
+            exit 1
+        fi
         
         while true; do
             echo -e "${YELLOW}Setting Application Default Credentials quota project...${NC}"
@@ -293,8 +300,13 @@ while true; do
         read -p "Would you like the script to enable it for you automatically? (Y/n) " ENABLE_COMPUTE
         if [[ ! "$ENABLE_COMPUTE" =~ ^[Nn] ]]; then
             echo "Enabling compute.googleapis.com... (hang tight, this takes about 30 seconds)"
-            gcloud services enable compute.googleapis.com --project="$PROJECT_ID" --quiet < /dev/null
-            echo -e "${GREEN}✓ API enabled! Resuming region verification...${NC}"
+            if gcloud services enable compute.googleapis.com --project="$PROJECT_ID" --quiet < /dev/null; then
+                echo -e "${GREEN}✓ API enabled! Resuming region verification...${NC}"
+            else
+                echo -e "${YELLOW}⚠ Could not enable Compute Engine API.${NC}"
+                echo -e "${YELLOW}Skipping strict verification. We will trust your manual input: $REGION${NC}"
+                break
+            fi
         else
             echo -e "${YELLOW}Skipping strict verification. We will trust your manual input: $REGION${NC}"
             break

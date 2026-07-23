@@ -13,7 +13,7 @@ resource "google_project_service" "required_services" {
 resource "google_project_iam_member" "cloudbuild_artifact_writer" {
   project = var.project_id
   role    = "roles/artifactregistry.writer"
-  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
+  member  = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
 
   depends_on = [google_project_service.required_services]
 }

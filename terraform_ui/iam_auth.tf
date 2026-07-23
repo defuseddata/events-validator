@@ -12,13 +12,23 @@ resource "google_cloud_run_v2_service_iam_member" "authorized_invokers" {
   member   = each.value
 }
 
+# Create IAP Service Agent if it doesn't exist (lazy creation on fresh projects can cause failures)
+resource "google_project_service_identity" "iap_sa" {
+  count    = var.use_classic_load_balancer ? 0 : 1
+  provider = google-beta
+  project  = var.project_id
+  service  = "iap.googleapis.com"
+
+  depends_on = [google_project_service.required_services]
+}
+
 # Allow IAP Service Agent to invoke Cloud Run (required for Direct Integration)
 resource "google_cloud_run_v2_service_iam_member" "iap_agent_invoker" {
   count    = var.use_classic_load_balancer ? 0 : 1
   location = google_cloud_run_v2_service.streamlit_ui.location
   name     = google_cloud_run_v2_service.streamlit_ui.name
   role     = "roles/run.invoker"
-  member   = "serviceAccount:service-${data.google_project.project.number}@gcp-sa-iap.iam.gserviceaccount.com"
+  member   = "serviceAccount:${google_project_service_identity.iap_sa[0].email}"
 }
 
 # Allow specific users to access ALL IAP-secured Web apps in this project
