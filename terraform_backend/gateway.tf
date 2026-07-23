@@ -8,7 +8,7 @@ resource "google_api_gateway_api" "gateway" {
 }
 
 resource "time_sleep" "wait_for_api_propagation" {
-  create_duration = "60s"
+  create_duration = "240s"
 
   depends_on = [google_api_gateway_api.gateway]
 }
