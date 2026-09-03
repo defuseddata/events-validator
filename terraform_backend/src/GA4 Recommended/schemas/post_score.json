@@ -15,10 +15,12 @@
   },
   "level": {
     "type": "number",
-    "description": "The level for the score."
+    "description": "The level for the score.",
+    "optional": true
   },
   "character": {
     "type": "string",
-    "description": "The character that achieved the score."
+    "description": "The character that achieved the score.",
+    "optional": true
   }
 }

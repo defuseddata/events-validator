@@ -11,14 +11,17 @@
   },
   "method": {
     "type": "string",
-    "description": "The method in which the content is shared."
+    "description": "The method in which the content is shared.",
+    "optional": true
   },
   "content_type": {
     "type": "string",
-    "description": "The type of shared content."
+    "description": "The type of shared content.",
+    "optional": true
   },
   "item_id": {
     "type": "string",
-    "description": "The ID of the shared content."
+    "description": "The ID of the shared content.",
+    "optional": true
   }
 }

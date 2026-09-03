@@ -15,6 +15,7 @@
   },
   "character": {
     "type": "string",
-    "description": "The character that leveled up."
+    "description": "The character that leveled up.",
+    "optional": true
   }
 }

@@ -11,6 +11,7 @@
   },
   "method": {
     "type": "string",
-    "description": "The method used for sign up."
+    "description": "The method used for sign up.",
+    "optional": true
   }
 }

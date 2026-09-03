@@ -204,7 +204,7 @@ function checkWithSchema(schemaObject, dataToValidate, parentPath = '', eventNam
 			continue;
 		}
 
-		if (rule.hasOwnProperty('value'))
+		if (rule.hasOwnProperty('value') && rule.value !== null)
 			checkValue(schemaObject, key, dataToValidate, parentPath, eventName, eventId, _root);
 		if (rule.hasOwnProperty('type'))
 			checkType(schemaObject, key, dataToValidate, parentPath, eventName, eventId, _root, getByPathFn);
