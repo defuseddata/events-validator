@@ -20,13 +20,22 @@ echo "║             Event Validator Setup Wizard                     ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
+# --- Project Preferences ---
+echo "Do you want to enable GitHub GitOps synchronization (Optional)? [Y/n]"
+echo "If enabled, schemas will be continuously synced from a GitHub repository."
+read -p "Enable GitOps? (Y/n) " ENABLE_GITOPS
+echo ""
+
 # --- Prerequisites Check ---
 echo -e "${BLUE}Checking prerequisites...${NC}"
 
 HAS_ERROR=0
 
 echo "Checking required tools:"
-for cmd in gh gcloud terraform; do
+TOOLS="gcloud terraform jq"
+if [[ ! "$ENABLE_GITOPS" =~ ^[Nn] ]]; then TOOLS="gh gcloud terraform jq"; fi
+
+for cmd in $TOOLS; do
   if ! command -v $cmd &> /dev/null; then
       echo -e "  ${RED}✗ $cmd is missing${NC}"
       HAS_ERROR=1
@@ -43,13 +52,23 @@ fi
 echo ""
 echo "Checking authentications:"
 
-if ! gh auth status &> /dev/null; then
-    echo -e "  ${RED}✗ GitHub CLI (gh) is not authenticated${NC}"
-    echo -e "    ${YELLOW}Fix by running: gh auth login${NC}"
+if ! gcloud auth print-access-token &> /dev/null; then
+    echo -e "  ${RED}✗ Google Cloud CLI session is not valid or has expired${NC}"
+    echo -e "    ${YELLOW}Fix by running: gcloud auth login${NC}"
     HAS_ERROR=1
 else
-    CURRENT_GITHUB_USER=$(gh api user -q '.login' 2>/dev/null || echo "")
-    echo -e "  ${GREEN}✓ GitHub CLI authenticated (User: $CURRENT_GITHUB_USER)${NC}"
+    echo -e "  ${GREEN}✓ Google Cloud CLI authenticated (Account: $(gcloud config get-value account 2>/dev/null))${NC}"
+fi
+
+if [[ ! "$ENABLE_GITOPS" =~ ^[Nn] ]]; then
+    if ! gh auth status &> /dev/null; then
+        echo -e "  ${RED}✗ GitHub CLI (gh) is not authenticated${NC}"
+        echo -e "    ${YELLOW}Fix by running: gh auth login${NC}"
+        HAS_ERROR=1
+    else
+        CURRENT_GITHUB_USER=$(gh api user -q '.login' 2>/dev/null || echo "")
+        echo -e "  ${GREEN}✓ GitHub CLI authenticated (User: $CURRENT_GITHUB_USER)${NC}"
+    fi
 fi
 
 if ! gcloud auth application-default print-access-token &> /dev/null; then
@@ -58,10 +77,22 @@ if ! gcloud auth application-default print-access-token &> /dev/null; then
     HAS_ERROR=1
 else
     DEFAULT_PROJECT=$(gcloud config get-value project 2>/dev/null || echo "")
+    ADC_EMAIL=$(curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=$(gcloud auth application-default print-access-token)" | jq -r '.email // empty' 2>/dev/null || echo "")
+    ADC_FILE="$(gcloud info --format='value(config.paths.global_config_dir)' 2>/dev/null || echo "")/application_default_credentials.json"
+    ADC_QUOTA_PROJECT=$(jq -r '.quota_project_id // empty' "$ADC_FILE" 2>/dev/null || echo "")
+
     if [ -n "$DEFAULT_PROJECT" ]; then
         echo -e "  ${GREEN}✓ Google Cloud authenticated (Default Project: $DEFAULT_PROJECT)${NC}"
     else
         echo -e "  ${GREEN}✓ Google Cloud authenticated${NC}"
+    fi
+
+    if [ -n "$ADC_EMAIL" ]; then
+        echo -e "    ${YELLOW}↳ ADC identity: $ADC_EMAIL${NC}"
+    fi
+
+    if [ -n "$ADC_QUOTA_PROJECT" ] && [ -n "$DEFAULT_PROJECT" ] && [ "$ADC_QUOTA_PROJECT" != "$DEFAULT_PROJECT" ]; then
+        echo -e "    ${YELLOW}⚠ ADC quota project ('$ADC_QUOTA_PROJECT') differs from gcloud's active project ('$DEFAULT_PROJECT'). This may cause 'set-quota-project' errors later.${NC}"
     fi
 fi
 
@@ -126,10 +157,126 @@ while true; do
             echo "Please select again."
             continue
         fi
+        echo ""
+        echo -e "${BLUE}Checking IAM permissions on '$PROJECT_ID' for ADC account ${ADC_EMAIL:-$(gcloud config get-value account 2>/dev/null)}...${NC}"
+
+        REQUIRED_PERMISSIONS=(
+            "serviceusage.services.enable"
+            "servicemanagement.services.bind"
+            "resourcemanager.projects.get"
+            "resourcemanager.projects.setIamPolicy"
+            "iam.serviceAccounts.create"
+            "iam.serviceAccounts.get"
+            "iam.serviceAccounts.actAs"
+            "storage.buckets.create"
+            "bigquery.datasets.create"
+            "cloudfunctions.functions.create"
+            "run.services.create"
+            "apigateway.apis.create"
+            "apikeys.keys.create"
+            "artifactregistry.repositories.create"
+        )
+
+        PERM_JSON_ITEMS=$(printf '"%s",' "${REQUIRED_PERMISSIONS[@]}")
+        PERM_JSON="[${PERM_JSON_ITEMS%,}]"
+        REQUEST_BODY=$(printf '{"permissions": %s}' "$PERM_JSON")
+
+        RESPONSE=$(curl -s -X POST \
+            -H "Authorization: Bearer $(gcloud auth application-default print-access-token 2>/dev/null)" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            -d "$REQUEST_BODY" \
+            "https://cloudresourcemanager.googleapis.com/v1/projects/${PROJECT_ID}:testIamPermissions" 2>&1) || true
+
+        if [ -z "$RESPONSE" ] || ! echo "$RESPONSE" | jq -e . > /dev/null 2>&1 || echo "$RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+            echo -e "${YELLOW}Warning: could not run the permission check.${NC}"
+            if [ -n "$RESPONSE" ]; then
+                echo "$RESPONSE" | jq -r '.error.message // .' 2>/dev/null || echo "$RESPONSE"
+            fi
+            echo -e "${YELLOW}Skipping this check and continuing.${NC}"
+        else
+            GRANTED=$(echo "$RESPONSE" | jq -r '.permissions[]? // empty')
+            MISSING=()
+            for p in "${REQUIRED_PERMISSIONS[@]}"; do
+                if ! echo "$GRANTED" | grep -qx "$p"; then
+                    MISSING+=("$p")
+                fi
+            done
+
+            if [ ${#MISSING[@]} -gt 0 ]; then
+                echo -e "${RED}✗ Missing permissions on '$PROJECT_ID':${NC}"
+                for p in "${MISSING[@]}"; do
+                    echo "   - $p"
+                done
+                echo -e "${YELLOW}You likely need the Owner or Editor role on this project (see README.md for the full breakdown). Ask a project admin, or if you're allowed to self-grant:${NC}"
+                echo -e "${CYAN}  gcloud projects add-iam-policy-binding $PROJECT_ID --member=\"user:${ADC_EMAIL:-$(gcloud config get-value account 2>/dev/null)}\" --role=\"roles/editor\"${NC}"
+                read -p "Continue anyway? (y/N) " CONTINUE_WITHOUT_PERMS
+                if [[ ! "$CONTINUE_WITHOUT_PERMS" =~ ^[Yy] ]]; then
+                    exit 1
+                fi
+            else
+                echo -e "${GREEN}✓ All checked permissions present.${NC}"
+            fi
+        fi
+
+        echo -e "${YELLOW}Enabling foundational GCP APIs for Terraform... (this takes ~15 seconds)${NC}"
+        if ! gcloud services enable cloudresourcemanager.googleapis.com serviceusage.googleapis.com iam.googleapis.com iap.googleapis.com cloudbuild.googleapis.com --project="$PROJECT_ID" --quiet < /dev/null; then
+            echo -e "${RED}✗ Failed to enable foundational APIs.${NC}"
+            echo -e "${YELLOW}Common causes:${NC}"
+            echo -e "  - Billing is not enabled on project '$PROJECT_ID'"
+            echo -e "  - You lack the 'serviceusage.services.enable' permission"
+            echo -e "${YELLOW}Please resolve these issues and try again.${NC}"
+            exit 1
+        fi
         
-        # Set quota project to fix Terraform ADC restrictions for some APIs (like apikeys)
-        echo -e "${YELLOW}Setting Application Default Credentials quota project...${NC}"
-        gcloud auth application-default set-quota-project "$PROJECT_ID"
+        while true; do
+            echo -e "${YELLOW}Setting Application Default Credentials quota project...${NC}"
+            if ADC_ERR=$(gcloud auth application-default set-quota-project "$PROJECT_ID" 2>&1); then
+                echo -e "${GREEN}✓ ADC quota project set to '$PROJECT_ID'.${NC}"
+                break
+            fi
+
+            echo -e "${RED}✗ Could not set the ADC quota project.${NC}"
+            echo -e "${YELLOW}gcloud said:${NC}"
+            echo "$ADC_ERR"
+            echo ""
+            echo -e "${BLUE}--- Your current context ---${NC}"
+            echo -e "  Active gcloud configuration    : $(gcloud config configurations list --filter='is_active=true' --format='value(name)' 2>/dev/null)"
+            echo -e "  Active gcloud CLI account      : $(gcloud config get-value account 2>/dev/null)"
+            echo -e "  ADC account (used by Terraform) : ${ADC_EMAIL:-unknown}"
+            echo -e "  Active project (gcloud config) : $(gcloud config get-value project 2>/dev/null)"
+            echo -e "  Target project (this install)  : $PROJECT_ID"
+            echo ""
+            echo -e "${YELLOW}This usually means either: (a) 'serviceusage.googleapis.com' hasn't finished propagating yet, or (b) the ADC account above ('${ADC_EMAIL:-unknown}') lacks the Service Usage Consumer role on '$PROJECT_ID'.${NC}"
+            echo -e "${RED}This must be fixed before continuing — API Keys, API Gateway, and IAP resources later in this install are known to fail without a working ADC quota project.${NC}"
+            echo ""
+            echo "What do you want to do?"
+            echo "  1) Re-authenticate ADC now (opens browser)"
+            echo "  2) I fixed it in another terminal — retry now"
+            echo "  3) Wait 15 seconds and retry (in case this is just API propagation)"
+            echo "  4) Abort installation"
+            read -p "> " ADC_FIX_CHOICE
+            case "$ADC_FIX_CHOICE" in
+                1)
+                    echo -e "${YELLOW}Opening browser to re-authenticate Application Default Credentials...${NC}"
+                    if ! gcloud auth application-default login; then
+                        echo -e "${RED}ADC re-authentication failed or was cancelled.${NC}"
+                    fi
+                    ADC_EMAIL=$(curl -s "https://oauth2.googleapis.com/tokeninfo?access_token=$(gcloud auth application-default print-access-token)" | jq -r '.email // empty' 2>/dev/null || echo "")
+                    echo -e "${GREEN}✓ ADC identity is now: ${ADC_EMAIL:-unknown}${NC}"
+                    ;;
+                3)
+                    echo "Waiting 15 seconds..."
+                    sleep 15
+                    ;;
+                4)
+                    echo -e "${RED}Aborting installation. Fix ADC and re-run this script when ready.${NC}"
+                    exit 1
+                    ;;
+                *)
+                    echo -e "${YELLOW}Retrying...${NC}"
+                    ;;
+            esac
+        done
         break
     else
         echo -e "${RED}Error: Project '$PROJECT_ID' does not exist or you don't have access to it.${NC}"
@@ -143,8 +290,31 @@ while true; do
     REGION=${INPUT_REGION:-europe-west1}
 
     echo "Verifying if Region '$REGION' is valid..."
-    # Use a temporary file to capture error messages from gcloud
-    REGION_ERROR=$(gcloud compute regions describe "$REGION" --project="$PROJECT_ID" 2>&1 > /dev/null || true)
+    
+    # SAFE CHECK: First verify if Compute API is enabled WITHOUT triggering the command that drops into interactive loops.
+    # We pipe < /dev/null to absolutely guarantee gcloud cannot freeze waiting for keyboard input.
+    API_CHECK=$(gcloud services list --enabled --filter="config.name:compute.googleapis.com" --project="$PROJECT_ID" --format="value(config.name)" < /dev/null 2>/dev/null || true)
+    
+    if [ "$API_CHECK" != "compute.googleapis.com" ]; then
+        echo -e "${YELLOW}The Compute Engine API (compute.googleapis.com) must be enabled to verify regions on this account.${NC}"
+        read -p "Would you like the script to enable it for you automatically? (Y/n) " ENABLE_COMPUTE
+        if [[ ! "$ENABLE_COMPUTE" =~ ^[Nn] ]]; then
+            echo "Enabling compute.googleapis.com... (hang tight, this takes about 30 seconds)"
+            if gcloud services enable compute.googleapis.com --project="$PROJECT_ID" --quiet < /dev/null; then
+                echo -e "${GREEN}✓ API enabled! Resuming region verification...${NC}"
+            else
+                echo -e "${YELLOW}⚠ Could not enable Compute Engine API.${NC}"
+                echo -e "${YELLOW}Skipping strict verification. We will trust your manual input: $REGION${NC}"
+                break
+            fi
+        else
+            echo -e "${YELLOW}Skipping strict verification. We will trust your manual input: $REGION${NC}"
+            break
+        fi
+    fi
+
+    # Now it is safe to run the actual region check
+    REGION_ERROR=$(gcloud compute regions describe "$REGION" --project="$PROJECT_ID" --quiet < /dev/null 2>&1 > /dev/null || true)
 
     if [ -z "$REGION_ERROR" ]; then
         echo -e "${GREEN}✓ Region '$REGION' verified.${NC}"
@@ -165,10 +335,6 @@ done
 
 echo ""
 echo -e "${BLUE}--- Step 2: GitHub Repository Setup ---${NC}"
-
-echo "Do you want to enable GitHub GitOps synchronization (Optional)? [Y/n]"
-echo "If enabled, schemas will be continuously synced from a GitHub repository."
-read -p "Enable GitOps? (Y/n) " ENABLE_GITOPS
 
 if [[ ! "$ENABLE_GITOPS" =~ ^[Nn] ]]; then
     echo "This script requires a GitHub Personal Access Token (PAT)."
@@ -452,9 +618,30 @@ read -p "Use Classic Load Balancer? (y/N) " INPUT_LB
 if [[ "$INPUT_LB" =~ ^[Yy] ]]; then USE_LB="true"; else USE_LB="false"; fi
 
 echo ""
+echo -e "${YELLOW}--- Security Notice: OAuth Consent Screen ---${NC}"
 echo "We need Identity-Aware Proxy (IAP) OAuth credentials to protect the UI."
-echo -e "You can create or find them here: ${CYAN}https://console.cloud.google.com/apis/credentials?project=$PROJECT_ID${NC}"
+echo -e "However, on a new project, Google requires you to configure the ${YELLOW}Google Auth Platform${NC} (formerly 'OAuth consent screen') first."
+echo ""
+echo -e "1. Go to: ${CYAN}https://console.cloud.google.com/auth/branding?project=$PROJECT_ID${NC}"
+echo -e "2. Fill in the required App Name and Support Email, then click Save."
+echo -e "3. Go to the 'Audience' tab: ${CYAN}https://console.cloud.google.com/auth/audience?project=$PROJECT_ID${NC}"
+echo -e "4. Choose 'Internal' (Workspace only) or 'External' (any Google account)."
+echo -e "5. If you chose External and the app stays in 'Testing' status, you MUST add every user you plan to authorize as a Test User on this same page — otherwise Google's own login screen will block them, even though IAP's IAM policy allows them."
+echo -e "   ${RED}Note: Test user access expires after 7 days and needs re-approving. For anything beyond a quick trial, consider publishing to 'Production' instead — no Google review is needed as long as you don't request extra scopes.${NC}"
+echo -e "6. NEXT, go to the 'Clients' tab: ${CYAN}https://console.cloud.google.com/auth/clients?project=$PROJECT_ID${NC}"
+echo -e "7. Click 'Create Client' -> 'Web application'."
+echo ""
 
+while true; do
+    read -p "Have you created the OAuth Consent Screen and your Client Credentials? (Y/n) " CONFIRM_OAUTH
+    if [[ "$CONFIRM_OAUTH" =~ ^[Nn] ]]; then
+        echo -e "${YELLOW}Please complete the steps in your browser first. The script is waiting patiently...${NC}"
+        continue
+    fi
+    break
+done
+
+echo ""
 
 while true; do
     read -p "IAP OAuth Client ID: " IAP_CLIENT_ID
@@ -474,6 +661,28 @@ while true; do
     fi
     break
 done
+
+echo ""
+echo -e "${YELLOW}--- ACTION REQUIRED: Add Redirect URI to your OAuth Client ---${NC}"
+echo -e "Because you are using Identity-Aware Proxy (IAP), Google requires a specific Authorized Redirect URI."
+echo ""
+echo -e "1. Go back to the Clients tab: ${CYAN}https://console.cloud.google.com/auth/clients?project=$PROJECT_ID${NC}"
+echo -e "2. Click the Web Application client you just created to open it."
+echo -e "3. Scroll down to ${CYAN}'Authorized redirect URIs'${NC} and click 'ADD URI'."
+echo -e "4. Copy and paste this EXACT URL into the box:"
+echo -e "   ${GREEN}https://iap.googleapis.com/v1/oauth/clientIds/${IAP_CLIENT_ID}:handleRedirect${NC}"
+echo -e "5. Click 'Save' at the bottom of the page."
+echo ""
+while true; do
+    read -p "Have you added and saved the Redirect URI? (Y/n) " CONFIRM_URI
+    if [[ "$CONFIRM_URI" =~ ^[Nn] ]]; then
+        echo -e "${YELLOW}Please complete the steps in your browser first...${NC}"
+        continue
+    fi
+    break
+done
+
+echo ""
 
 while true; do
     read -p "IAP OAuth Client Secret: " IAP_CLIENT_SECRET
@@ -574,7 +783,7 @@ if [[ ! "$CONFIRM_BUILD" =~ ^[Nn] ]]; then
    terraform init >/dev/null 2>&1
    
    echo -e "${YELLOW}Provisioning Artifact Registry Repository...${NC}"
-   if ! terraform apply -target="google_artifact_registry_repository.streamlit_repo" -auto-approve >/dev/null; then
+   if ! terraform apply -target="google_artifact_registry_repository.streamlit_repo" -target="google_project_iam_member.cloudbuild_artifact_writer" -auto-approve >/dev/null; then
        echo -e "${RED}Error: Failed to provision the Artifact Registry repository.${NC}"
        echo -e "${YELLOW}Hint: Ensure 'artifactregistry.googleapis.com' API is enabled and your user has sufficient IAM permissions.${NC}"
        exit 1
@@ -582,7 +791,7 @@ if [[ ! "$CONFIRM_BUILD" =~ ^[Nn] ]]; then
 
    cd ..
    echo -e "${YELLOW}Building Docker Image via Cloud Build... (this may take 2-4 minutes)${NC}"
-   if ! gcloud builds submit --region="$REGION" --tag "$REGION-docker.pkg.dev/$PROJECT_ID/event-validator-ui-repo/event-validator-ui:latest" ./streamlit_ev; then
+   if ! gcloud builds submit --project="$PROJECT_ID" --region="$REGION" --tag "$REGION-docker.pkg.dev/$PROJECT_ID/event-validator-ui-repo/event-validator-ui:latest" ./streamlit_ev; then
        echo -e "${RED}Error: Failed to build and push the UI Docker image.${NC}"
        echo -e "${YELLOW}Hint: Ensure 'cloudbuild.googleapis.com' API is enabled and your project has billing attached.${NC}"
        exit 1
