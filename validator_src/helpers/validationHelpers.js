@@ -145,15 +145,13 @@ function checkWithSchema(schemaObject, dataToValidate, parentPath = '', eventNam
                     continue;
                 }
                 if (!Object.prototype.hasOwnProperty.call(dataToValidate, key)) {
-                     if (!isOptional) {
-                         logError(
-                            fieldPath, 
-                            'missing_conditional', 
-                            'field present', 
-                            'field missing', 
-                            eventName, _root, eventId
-                         );
-                     }
+                     logError(
+                        fieldPath,
+                        'missing_conditional',
+                        'field present',
+                        'field missing',
+                        eventName, _root, eventId
+                     );
                      continue;
                 }
             }
@@ -174,16 +172,14 @@ function checkWithSchema(schemaObject, dataToValidate, parentPath = '', eventNam
                 }
                 
                 if (!Object.prototype.hasOwnProperty.call(dataToValidate, key)) {
-                     if (!isOptional) {
-                         logError(
-                            fieldPath, 
-                            'missing_conditional', 
-							 // `field present,${conditionField}=${targetValue}`, 
-							'field present',
-                            'field missing', 
-                            eventName, _root, eventId
-                         );
-                     }
+                     logError(
+                        fieldPath,
+                        'missing_conditional',
+                        // `field present,${conditionField}=${targetValue}`,
+                        'field present',
+                        'field missing',
+                        eventName, _root, eventId
+                     );
                      continue;
                 }
             }
