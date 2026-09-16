@@ -21,7 +21,7 @@ st.session_state.setdefault("event_name", "")
 st.session_state.setdefault("schema", {})
 st.session_state.setdefault("schema_version", int(0))
 
-pages = ["Home", "Explorer", "Builder", "Params Repo", "Export"]
+pages = ["Home", "Explorer", "Builder", "Params Repo", "Export", "Validation Report"]
 # Map session state page to index
 current_page = st.session_state.page.lower()
 try:

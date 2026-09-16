@@ -21,6 +21,27 @@ from helpers.storage import (
 )
 from helpers.components import render_branch_selector, render_storage_status
 
+def build_grouped_dependency_options(repo, schema, current_cond_param, exclude_key=None):
+    """Options for a 'Dependency Parameter' selectbox: params already used in
+    this schema first (sorted), then the rest of the Repo (sorted) — every
+    option stays fully, meaningfully selectable, no separator row involved.
+    `exclude_key` drops the field being edited itself — a field can't
+    meaningfully depend on its own presence/value. Returns (options, index,
+    format_func) — pass format_func straight to st.selectbox to render the
+    "already in schema" ones with a ✓ chip, purely a display-label thing."""
+    schema_keys = {f.get("key") for f in schema.values() if f.get("key")}
+    all_params = sorted(k for k in repo.keys() if k != exclude_key)
+    if current_cond_param and current_cond_param not in all_params and current_cond_param != exclude_key:
+        all_params.append(current_cond_param)
+
+    in_schema = sorted(p for p in all_params if p in schema_keys)
+    not_in_schema = sorted(p for p in all_params if p not in schema_keys)
+    opts = [""] + in_schema + not_in_schema
+
+    idx = opts.index(current_cond_param) if current_cond_param in opts else 0
+    format_func = lambda p: f"✓ {p}" if p in schema_keys else (p if p else "—")
+    return opts, idx, format_func
+
 
 # RENDER READ-ONLY FIELD (NORMAL)
 
@@ -32,8 +53,11 @@ def render_schema_param(field_id, field):
     param_name = field.get("key", "")
     repo_default = repo.get(param_name, {}).get("value", "")
 
+    # Only string fields support the Exact/Contains match mode.
+    is_contains_mode = field.get("type") not in ("array", "boolean", "number") and "value_contains" in field
+
     # Robust comparison (0.0 vs 0)
-    current_val = field.get("value", "")
+    current_val = field.get("value_contains", "") if is_contains_mode else field.get("value", "")
 
     def values_match(v1, v2, p_type):
         if p_type == "number":
@@ -79,44 +103,59 @@ def render_schema_param(field_id, field):
                     st.error("Invalid number")
             st.session_state.schema[field_id] = field
     else:
-        new_val = cols[2].text_input("Value", str(current_val), key=f"schema_value_{field_id}")
-        if new_val != str(current_val):
-            field["value"] = new_val
+        with cols[2]:
+            match_mode = st.radio(
+                "Match", ["Exact", "Contains"], index=(1 if is_contains_mode else 0),
+                key=f"schema_match_{field_id}", horizontal=True,
+                help="Exact: value must match exactly. Contains: value must contain this substring.",
+            )
+            value_label = "Value" if match_mode == "Exact" else "Contains"
+            new_val = st.text_input(value_label, str(current_val), key=f"schema_value_{field_id}")
+
+        desired_key = "value_contains" if match_mode == "Contains" else "value"
+        stale_key = "value" if match_mode == "Contains" else "value_contains"
+        if field.get(desired_key, "") != new_val or stale_key in field:
+            field[desired_key] = new_val
+            field.pop(stale_key, None)
             st.session_state.schema[field_id] = field
 
-    # Actions: Reset and Delete
-    act_cols = cols[3].columns([1, 1])
+    # Actions: Reset and Delete (icon-only — column is too narrow for "Reset" as text)
     if is_overridden:
-        if act_cols[0].button("Reset", key=f"schema_reset_{field_id}", help="Reset to Repo default"):
+        if cols[3].button("↺", key=f"schema_reset_{field_id}", help="Reset to Repo default"):
             field["value"] = repo_default
+            field.pop("value_contains", None)
             st.session_state.schema[field_id] = field
             st.toast(f"Reset '{param_name}' to default.")
             st.rerun()
 
-    if act_cols[1].button("X", key=f"schema_delete_{field_id}"):
+    if cols[3].button("X", key=f"schema_delete_{field_id}"):
         delete_field_and_rerun(field_id)
 
     # Advanced Label Logic
     adv_label = "Advanced"
     current_vip = field.get("validate_if_present", "")
-    warning_active = False
+
+    # Sticky expanded state: st.expander only re-forces `expanded` on the
+    # frontend when the value we pass actually changes between reruns, so
+    # once a missing-dependency warning flips this True we stop touching it
+    # again — otherwise fixing the warning (dep now found) would flip
+    # `expanded` back to False and yank the box shut mid-edit.
+    expanded_key = f"adv_expanded_{field_id}"
+    st.session_state.setdefault(expanded_key, False)
 
     if current_vip:
          dep_check = next((f for f in st.session_state.schema.values() if f.get("key") == current_vip), None)
          if not dep_check:
              adv_label += " ⚠️ (Missing Dep)"
-             warning_active = True
+             st.session_state[expanded_key] = True
          elif dep_check.get("optional") is True:
              adv_label += " ℹ️ (Dep Optional)"
-             # Don't auto-expand for info messages, only for missing deps (errors)
-             # warning_active = True
 
-    with st.expander(adv_label, expanded=warning_active):
+    with st.expander(adv_label, expanded=st.session_state[expanded_key]):
         c_adv = st.columns(2)
         
         repo = st.session_state.get("repo", {})
-        all_params = sorted(list(repo.keys()))
-        
+
         # 1. Determine Current Mode
         current_mode = "Required (Always)"
         current_vi = field.get("validate_if", {})
@@ -140,13 +179,9 @@ def render_schema_param(field_id, field):
         
         if new_mode in ["Conditional (Dependent Present)", "Conditional (Required Value)"]:
              current_cond_param = current_vi.get("field", "") if new_mode == "Conditional (Required Value)" else current_vip
-             if current_cond_param and current_cond_param not in all_params:
-                 all_params.append(current_cond_param)
-             
-             p_opts = [""] + all_params
-             v_idx = p_opts.index(current_cond_param) if current_cond_param in p_opts else 0
-             target_vip = st.selectbox("Dependency Parameter", options=p_opts, index=v_idx, key=f"vip_sel_{field_id}", help="Validation runs ONLY if this parameter meets the condition.")
-             
+             p_opts, v_idx, fmt = build_grouped_dependency_options(repo, st.session_state.schema, current_cond_param, exclude_key=param_name)
+             target_vip = st.selectbox("Dependency Parameter", options=p_opts, index=v_idx, format_func=fmt, key=f"vip_sel_{field_id}", help="Validation runs ONLY if this parameter meets the condition.")
+
              if target_vip in repo:
                  dep_type = repo[target_vip].get("type", "string")
 
@@ -280,10 +315,14 @@ def render_array_param(field_id, field):
         cols = st.columns([3, 2, 3, 1])
         n_key = nf.get("key", "")
 
+        # Only string nested fields support the Exact/Contains match mode.
+        is_n_contains_mode = nf.get("type") not in ("boolean", "number", "object") and "value_contains" in nf
+
         # Check override for nested
         r_nf = repo_nested.get(n_key, {})
         r_val = r_nf.get("value", "")
-        is_n_overridden = str(nf.get("value", "")) != str(r_val) and n_key in repo_nested
+        current_n_val = nf.get("value_contains", "") if is_n_contains_mode else nf.get("value", "")
+        is_n_overridden = str(current_n_val) != str(r_val) and n_key in repo_nested
 
         label = f"Key {'[override]' if is_n_overridden else ''}"
         cols[0].text_input(label, n_key, disabled=True, key=f"arr_nested_key_{field_id}_{nid}")
@@ -308,35 +347,54 @@ def render_array_param(field_id, field):
                     except ValueError:
                         st.error("Invalid number")
                 st.session_state.schema[field_id]["nestedSchema"][nid] = nf
+        elif nf.get("type") == "object":
+            cols[2].markdown("—")
+        else:
+            with cols[2]:
+                n_match_mode = st.radio(
+                    "Match", ["Exact", "Contains"], index=(1 if is_n_contains_mode else 0),
+                    key=f"arr_nested_match_{field_id}_{nid}", horizontal=True,
+                    help="Exact: value must match exactly. Contains: value must contain this substring.",
+                )
+                n_value_label = "Value" if n_match_mode == "Exact" else "Contains"
+                new_n_val = st.text_input(n_value_label, str(current_n_val), key=f"arr_nested_value_{field_id}_{nid}")
+
+            n_desired_key = "value_contains" if n_match_mode == "Contains" else "value"
+            n_stale_key = "value" if n_match_mode == "Contains" else "value_contains"
+            if nf.get(n_desired_key, "") != new_n_val or n_stale_key in nf:
+                nf[n_desired_key] = new_n_val
+                nf.pop(n_stale_key, None)
+                st.session_state.schema[field_id]["nestedSchema"][nid] = nf
 
         if is_n_overridden:
-            if cols[3].button("Reset", key=f"arr_nested_reset_{field_id}_{nid}", help="Reset to Repo default"):
+            if cols[3].button("↺", key=f"arr_nested_reset_{field_id}_{nid}", help="Reset to Repo default"):
                 nf["value"] = r_val
+                nf.pop("value_contains", None)
                 st.session_state.schema[field_id]["nestedSchema"][nid] = nf
                 st.rerun()
         # Nested Advanced Label Logic
         n_adv_label = f"Advanced ({n_key})"
         n_vip = nf.get("validate_if_present", "")
-        n_warning_active = False
+
+        # Sticky expanded state — see the top-level field's identical comment above.
+        n_expanded_key = f"adv_expanded_{field_id}_{nid}"
+        st.session_state.setdefault(n_expanded_key, False)
 
         if n_vip:
              # Check root schema for dependency
              dep_check_n = next((f for f in st.session_state.schema.values() if f.get("key") == n_vip), None)
              if not dep_check_n:
                  n_adv_label += " ⚠️ (Missing Dep)"
-                 n_warning_active = True
+                 st.session_state[n_expanded_key] = True
              elif dep_check_n.get("optional") is True:
                  n_adv_label += " ℹ️ (Dep Optional)"
-                 # Don't auto-expand for info messages
-                 # n_warning_active = True
 
-        with st.expander(n_adv_label, expanded=n_warning_active):
+        with st.expander(n_adv_label, expanded=st.session_state[n_expanded_key]):
              c_n_adv = st.columns(2)
              
              # 2. Nest Vip Select (Prepare options)
              repo = st.session_state.get("repo", {})
-             all_params_n = sorted(list(repo.keys()))
-             
+
              # UX SIMPLIFICATION (Nested)
              # 1. Determine Mode
              n_mode = "Required (Always)"
@@ -359,15 +417,9 @@ def render_array_param(field_id, field):
              
              if new_n_mode in ["Conditional (Dependent Present)", "Conditional (Required Value)"]:
                  repo = st.session_state.get("repo", {})
-                 all_params_n = sorted(list(repo.keys()))
                  n_current_cond_param = n_vi.get("field", "") if new_n_mode == "Conditional (Required Value)" else n_vip
-                 
-                 if n_current_cond_param and n_current_cond_param not in all_params_n:
-                     all_params_n.append(n_current_cond_param)
-                 
-                 np_opts = [""] + all_params_n
-                 nvip_idx = np_opts.index(n_current_cond_param) if n_current_cond_param in np_opts else 0
-                 n_target_vip = st.selectbox("Dependency Parameter", options=np_opts, index=nvip_idx, key=f"n_vip_sel_{field_id}_{nid}")
+                 np_opts, nvip_idx, n_fmt = build_grouped_dependency_options(repo, st.session_state.schema, n_current_cond_param, exclude_key=n_key)
+                 n_target_vip = st.selectbox("Dependency Parameter", options=np_opts, index=nvip_idx, format_func=n_fmt, key=f"n_vip_sel_{field_id}_{nid}")
 
                  if n_target_vip in repo:
                      n_dep_type = repo[n_target_vip].get("type", "string")

@@ -87,29 +87,25 @@ function checkLength(schemaObject, key, dataToValidate, parentPath = '', eventNa
 	}
 }
 
-function checkValue(schemaObject, keyRaw, dataToValidate, parentPath = '', eventName, eventId, rootData) {
-	let key = keyRaw;
-	let method = 'exact';
-	/* 
-    TODO: Fix Wildcard Logic. 
-    Currently, parent loop checkWithSchema fails to identify fields with '*' prefix in data.
-    Code disabled until checkWithSchema is updated.
-    
-    if (keyRaw.startsWith('*')) {
-		key = keyRaw.substring(1);
-		method = 'contains';
-	}
-    */
-	const expected = schemaObject[keyRaw].value;
+function checkValue(schemaObject, key, dataToValidate, parentPath = '', eventName, eventId, rootData) {
+	const expected = schemaObject[key].value;
 	const actual = dataToValidate[key];
 	const fieldPath = parentPath ? `${parentPath}.${key}` : key;
 	const _root = rootData || dataToValidate;
 
-	// if (method === 'contains' && (!actual || !actual.toString().includes(expected))) {
-	// 	logError(fieldPath, 'value_contains', expected, actual, eventName, _root, eventId);
-	// } else 
-    if (method === 'exact' && actual?.toString() !== expected?.toString()) {
+	if (actual?.toString() !== expected?.toString()) {
 		logError(fieldPath, 'value', expected, actual, eventName, _root, eventId);
+	}
+}
+
+function checkValueContains(schemaObject, key, dataToValidate, parentPath = '', eventName, eventId, rootData) {
+	const expected = schemaObject[key].value_contains;
+	const actual = dataToValidate[key];
+	const fieldPath = parentPath ? `${parentPath}.${key}` : key;
+	const _root = rootData || dataToValidate;
+
+	if (!actual || !actual.toString().includes(expected)) {
+		logError(fieldPath, 'value_contains', expected, actual, eventName, _root, eventId);
 	}
 }
 
@@ -202,6 +198,8 @@ function checkWithSchema(schemaObject, dataToValidate, parentPath = '', eventNam
 
 		if (rule.hasOwnProperty('value'))
 			checkValue(schemaObject, key, dataToValidate, parentPath, eventName, eventId, _root);
+		if (rule.hasOwnProperty('value_contains'))
+			checkValueContains(schemaObject, key, dataToValidate, parentPath, eventName, eventId, _root);
 		if (rule.hasOwnProperty('type'))
 			checkType(schemaObject, key, dataToValidate, parentPath, eventName, eventId, _root, getByPathFn);
 		if (rule.hasOwnProperty('length'))
@@ -214,5 +212,6 @@ function checkWithSchema(schemaObject, dataToValidate, parentPath = '', eventNam
 exports.checkType = checkType;
 exports.checkLength = checkLength;
 exports.checkValue = checkValue;
+exports.checkValueContains = checkValueContains;
 exports.checkRegex = checkRegex;
 exports.checkWithSchema = checkWithSchema;

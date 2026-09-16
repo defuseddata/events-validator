@@ -1,7 +1,7 @@
 import streamlit as st
 
 def render_home():
-    st.title("📦 Event Schema Manager")
+    st.title("Event Schema Manager")
     
     # Hero / Intro
     st.markdown("""
@@ -15,7 +15,7 @@ def render_home():
     st.divider()
 
     # Workflow High Level
-    st.subheader("🚀 The Workflow")
+    st.subheader("The Workflow")
     
     c1, c2, c3, c4 = st.columns(4)
     with c1:
@@ -34,13 +34,13 @@ def render_home():
     st.divider()
     
     # Detailed Features
-    st.subheader("✨ Key Features")
+    st.subheader("Key Features")
     
     with st.container():
         col_repo, col_exp = st.columns(2)
         
         with col_repo:
-            st.info("📚 **Parameters Repository**")
+            st.info("**Parameters Repository**")
             st.markdown("""
             - **Single Source of Truth**: Define parameters once, use everywhere.
             - **Transactional Updates**: Editing a parameter triggers a *Safe Update Workflow*.
@@ -49,7 +49,7 @@ def render_home():
             """)
             
         with col_exp:
-            st.warning("🔍 **Schema Explorer**")
+            st.warning("**Schema Explorer**")
             st.markdown("""
             - **Cloud Storage Browser**: View schemas directly from your GCP bucket.
             - **Health Checks**: Automatically detects schemas that are out-of-sync with the Repo.
@@ -58,7 +58,7 @@ def render_home():
             """)
             
     with st.container():
-        st.success("🔧 **Schema Builder**")
+        st.success("**Schema Builder**")
         st.markdown("""
         - **Visual Editor**: No need to write raw JSON.
         - **Type Safety**: Enforces types (String, Number, Boolean, Arrays, Objects).
