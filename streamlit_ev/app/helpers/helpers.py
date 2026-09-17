@@ -156,7 +156,10 @@ def export_schema():
                     except (ValueError, TypeError):
                         pass
                 props["value"] = val
-            
+
+            if field.get("value_contains") not in ("", None, []):
+                props["value_contains"] = field["value_contains"]
+
             if field.get("regex") not in ("", None, []):
                 props["regex"] = field["regex"]
 
@@ -184,7 +187,10 @@ def export_schema():
                         except (ValueError, TypeError):
                             pass
                     np["value"] = nv
-                
+
+                if nested.get("value_contains") not in ("", None, []):
+                    np["value_contains"] = nested["value_contains"]
+
                 # Add Optional & Conditional (Nested)
                 if nested.get("optional"):
                     np["optional"] = True
