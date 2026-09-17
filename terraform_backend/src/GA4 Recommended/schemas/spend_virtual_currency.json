@@ -19,6 +19,7 @@
   },
   "item_name": {
     "type": "string",
-    "description": "The name of the item the virtual currency is being used for."
+    "description": "The name of the item the virtual currency is being used for.",
+    "optional": true
   }
 }

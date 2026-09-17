@@ -15,6 +15,7 @@
   },
   "success": {
     "type": "boolean",
-    "description": "Set to true if the level was completed successfully."
+    "description": "Set to true if the level was completed successfully.",
+    "optional": true
   }
 }
