@@ -99,12 +99,19 @@ function checkValue(schemaObject, key, dataToValidate, parentPath = '', eventNam
 }
 
 function checkValueContains(schemaObject, key, dataToValidate, parentPath = '', eventName, eventId, rootData) {
-	const expected = schemaObject[key].value_contains;
+	const rule = schemaObject[key];
+	const expected = rule.value_contains;
 	const actual = dataToValidate[key];
 	const fieldPath = parentPath ? `${parentPath}.${key}` : key;
 	const _root = rootData || dataToValidate;
+	const caseSensitive = rule.value_contains_case_sensitive !== false;
 
-	if (!actual || !actual.toString().includes(expected)) {
+	const actualStr = actual != null ? actual.toString() : '';
+	const expectedStr = expected != null ? expected.toString() : '';
+	const haystack = caseSensitive ? actualStr : actualStr.toLowerCase();
+	const needle = caseSensitive ? expectedStr : expectedStr.toLowerCase();
+
+	if (!actual || !haystack.includes(needle)) {
 		logError(fieldPath, 'value_contains', expected, actual, eventName, _root, eventId);
 	}
 }

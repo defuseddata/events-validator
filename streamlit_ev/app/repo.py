@@ -1,5 +1,4 @@
 import time
-import pandas as pd
 import streamlit as st
 import json
 import os
@@ -20,7 +19,8 @@ from helpers.updater import (
     render_diff_ui,
     construct_schema_definition,
     update_schema_full,
-    check_schema_health
+    check_schema_health,
+    preserve_schema_customization
 )
 from dotenv import load_dotenv
 
@@ -61,6 +61,42 @@ def get_available_categories():
         for param in st.session_state.get("repo", {}).values()
         if param.get("category")
     })
+
+
+_NEW_CATEGORY_SENTINEL = "__add_new_category__"
+_RESERVED_CATEGORY_NAMES = {"none", "uncategorized", "all categories", ""}
+
+
+def render_category_picker(container, current_category, key_prefix):
+    """Selectbox with a '— No category —' option and a '+ Add new category…'
+    option that reveals a text input, instead of typing new options inline
+    (which was confusing — see .dev/handoffs)."""
+    existing = get_available_categories()
+    options = [""] + existing
+    if current_category and current_category not in options:
+        options = options + [current_category]
+    options = options + [_NEW_CATEGORY_SENTINEL]
+
+    def _fmt(c):
+        if c == "":
+            return "— No category —"
+        if c == _NEW_CATEGORY_SENTINEL:
+            return "+ Add new category…"
+        return c
+
+    idx = options.index(current_category) if current_category in options else 0
+    choice = container.selectbox(
+        "Category", options, index=idx, key=f"{key_prefix}_select", format_func=_fmt,
+    )
+    if choice == _NEW_CATEGORY_SENTINEL:
+        typed = container.text_input(
+            "New category name", key=f"{key_prefix}_new_name", placeholder="e.g. Marketing",
+        ).strip()
+        if typed and typed.lower() in _RESERVED_CATEGORY_NAMES:
+            container.error(f"'{typed}' is a reserved name and can't be used as a category.")
+            return ""
+        return typed
+    return choice
 
 
 # RENDER REPO
@@ -105,8 +141,37 @@ def render_repo():
     if not repo:
         st.info("Repository is empty. Add the first parameter!")
     else:
-        for name, param in repo.items():
-            category = param.get("category", "Uncategorized")
+        col_category, col_search = st.columns([2, 3], vertical_alignment="center")
+        with col_category:
+            has_uncategorized = any(not param.get("category") for param in repo.values())
+            category_filter = st.selectbox(
+                "Filter by category",
+                ["All Categories"] + ([""] if has_uncategorized else []) + get_available_categories(),
+                key="repo_category_filter",
+                label_visibility="collapsed",
+                format_func=lambda c: "— No category —" if c == "" else c,
+            )
+        with col_search:
+            query = st.text_input(
+                "Search parameter",
+                key="repo_search",
+                label_visibility="collapsed",
+                placeholder="Search parameter",
+            )
+
+        filtered_repo = list(repo.items())
+        if query:
+            filtered_repo = [(name, param) for name, param in filtered_repo if query.lower() in name.lower()]
+        if category_filter != "All Categories":
+            filtered_repo = [
+                (name, param) for name, param in filtered_repo
+                if (param.get("category") or "") == category_filter
+            ]
+        if not filtered_repo:
+            st.info("No parameters match the current filters.")
+
+        for name, param in filtered_repo:
+            category = param.get("category") or "— No category —"
             param_type = param.get("type", "Undefined")
 
             exp_label = (
@@ -118,17 +183,14 @@ def render_repo():
             with st.expander(exp_label, expanded=False):
                 cols = st.columns([2,2])
 
-                table = pd.DataFrame(data=[
-                    ["Type", str(param.get("type", ""))],
-                    ["Default Value", str(param.get("value", ""))],
-                    ["Category", str(param.get("category", ""))],
-                    ["Description", str(param.get("description", ""))],
-                    ["Used In", json.dumps(param.get("usedInSchemas", ""))],
-                ], columns=pd.Index(["Field", "Value"]))
-
                 with cols[0]:
-                    # Type hint to help Pyright
-                    st.table(table.set_index("Field"))
+                    st.markdown(
+                        f"**Type:** {param.get('type', '')}  \n"
+                        f"**Default Value:** {param.get('value', '')}  \n"
+                        f"**Category:** {param.get('category', '')}  \n"
+                        f"**Description:** {param.get('description', '')}  \n"
+                        f"**Used In:** {json.dumps(param.get('usedInSchemas', ''))}"
+                    )
                 with cols[1]:
                     st.json(param, expanded=False)
                 if st.button("Edit", key=f"button-test-{name}"):
@@ -259,6 +321,7 @@ def add_bulk_param():
         "name": "",
         "type": "string",
         "category": "",
+        "has_default": False,
         "mode": "Value",
         "value": "",
         "regex": "",
@@ -306,45 +369,79 @@ def newParamBuilder(param_id):
     for pid, p_data in params_to_render:
         with st.container():
             st.markdown(f"#### Parameter #{pid + 1}")
-            cols = st.columns([3, 2, 2, 2, 2, 4, 1])
+            cols = st.columns([3, 2, 2, 4, 1])
 
             p_data["name"] = cols[0].text_input("Name", p_data["name"], key=f"bp_name_{pid}")
+            prev_p_type = p_data["type"]
             p_data["type"] = cols[1].selectbox("Type", typeOptions, key=f"bp_type_{pid}", index=typeOptions.index(p_data["type"]) if p_data["type"] in typeOptions else 0)
-            
-            p_data["category"] = cols[2].selectbox(
-                "Category",
-                get_available_categories(),
-                key=f"bp_cat_{pid}",
-                accept_new_options=True,
-                index=get_available_categories().index(p_data["category"]) if p_data["category"] in get_available_categories() else 0,
-                placeholder="choose..."
-            )
+            if p_data["type"] != prev_p_type:
+                # Drop the old value/regex — otherwise a leftover boolean
+                # value like "Any" silently becomes the new string default.
+                p_data["value"] = "Any" if p_data["type"] == "boolean" else ""
+                p_data["regex"] = ""
+
+            p_data["category"] = render_category_picker(cols[2], p_data["category"], f"bp_cat_{pid}")
+
+            p_data["description"] = cols[3].text_area("Description", p_data["description"], key=f"bp_desc_{pid}", height=68)
+
+            if len(st.session_state.bulk_params) > 1:
+                cols[4].button("X", key=f"bp_del_{pid}", on_click=delete_bulk_param, args=(pid,))
 
             if p_data["type"] != "array":
-                p_data["mode"] = cols[3].selectbox("Validation", ["Value", "Regex"], key=f"bp_mode_{pid}", index=0 if p_data["mode"] == "Value" else 1)
-                
-                if p_data["mode"] == "Value":
+                default_cols = st.columns([2, 2, 4])
+                has_default = default_cols[0].radio(
+                    "Default value?",
+                    ["No default value", "Set a default value"],
+                    index=1 if p_data.get("has_default") else 0,
+                    key=f"bp_has_default_{pid}",
+                ) == "Set a default value"
+                p_data["has_default"] = has_default
+
+                if has_default:
                     if p_data["type"] == "boolean":
-                         p_data["value"] = cols[4].selectbox("Value", ["true", "false", "Any"], key=f"bp_val_{pid}", index=["true", "false", "Any"].index(str(p_data["value"]).lower()) if str(p_data["value"]).lower() in ["true", "false", "Any"] else 2)
-                    elif p_data["type"] == "number":
-                         v = p_data.get("value")
-                         num_v = str(v) if v is not None and str(v).strip() != "" else ""
-                         p_data["value"] = cols[4].text_input("Value", value=num_v, placeholder="empty", key=f"bp_val_{pid}")
-                         if isinstance(p_data["value"], str) and p_data["value"].strip() != "":
-                             try: float(p_data["value"])
-                             except: cols[4].error("Invalid number", icon="⚠️")
+                        p_data["mode"] = "Value"
                     else:
-                         p_data["value"] = cols[4].text_input("Value", p_data["value"], key=f"bp_val_{pid}")
+                        mode_choice = default_cols[1].radio(
+                            "Validation Type",
+                            ["Fixed Value", "Regex Pattern"],
+                            index=0 if p_data["mode"] == "Value" else 1,
+                            key=f"bp_mode_{pid}",
+                        )
+                        p_data["mode"] = "Value" if mode_choice == "Fixed Value" else "Regex"
+
+                    if p_data["mode"] == "Value":
+                        if p_data["type"] == "boolean":
+                             p_data["value"] = default_cols[1].selectbox(
+                                 "Default Value", ["true", "false", "Any"], key=f"bp_val_{pid}_{p_data['type']}",
+                                 index=["true", "false", "Any"].index(str(p_data["value"]).lower()) if str(p_data["value"]).lower() in ["true", "false", "Any"] else 2,
+                                 help="Choose 'Any' if this parameter has no default value.",
+                             )
+                        elif p_data["type"] == "number":
+                             v = p_data.get("value")
+                             num_v = str(v) if v is not None and str(v).strip() != "" else ""
+                             p_data["value"] = default_cols[2].text_input(
+                                 "Default Value", value=num_v, placeholder="empty", key=f"bp_val_{pid}_{p_data['type']}",
+                                 help="Leave empty if this parameter has no default value.",
+                             )
+                             if isinstance(p_data["value"], str) and p_data["value"].strip() != "":
+                                 try: float(p_data["value"])
+                                 except: default_cols[2].error("Invalid number", icon="⚠️")
+                        else:
+                             p_data["value"] = default_cols[2].text_input(
+                                 "Default Value", p_data["value"], key=f"bp_val_{pid}_{p_data['type']}",
+                                 placeholder="empty",
+                                 help="Leave empty if this parameter has no default value.",
+                             )
+                    else:
+                        p_data["regex"] = default_cols[2].text_input(
+                            "Regex", p_data["regex"], key=f"bp_regex_{pid}",
+                            help="Standard JavaScript regex pattern — no leading/trailing `/`. "
+                                 "Example: `^[A-Z]{2}\\d{4}$` matches two uppercase letters followed by 4 digits.",
+                        )
                 else:
-                    p_data["regex"] = cols[4].text_input("Regex", p_data["regex"], key=f"bp_regex_{pid}")
-            else:
-                cols[3].markdown("—")
-                cols[4].markdown("—")
-            
-            p_data["description"] = cols[5].text_area("Description", p_data["description"], key=f"bp_desc_{pid}", height=68)
-            
-            if len(st.session_state.bulk_params) > 1:
-                cols[6].button("🗑️", key=f"bp_del_{pid}", on_click=delete_bulk_param, args=(pid,))
+                    p_data["mode"] = "Value"
+                    p_data["value"] = "Any" if p_data["type"] == "boolean" else ""
+                    default_cols[2].caption("No default value or pattern will be set for this parameter.")
 
             # Nested fields for Array
             if p_data["type"] == "array":
@@ -353,26 +450,34 @@ def newParamBuilder(param_id):
                     for nid, nf in nested_items:
                         r = st.columns([3, 2, 2, 2, 1])
                         nf["key"] = r[0].text_input("Key", nf["key"], key=f"bp_n_key_{pid}_{nid}")
-                        nf["type"] = r[1].selectbox("Type", ["string", "number", "boolean"], key=f"bp_n_type_{pid}_{nid}", index=["string", "number", "boolean"].index(nf["type"]))
-                        
-                        nf["mode"] = r[2].selectbox("Validation", ["Value", "Regex"], key=f"bp_n_mode_{pid}_{nid}", index=0 if nf.get("mode", "Value") == "Value" else 1)
-                        
+
+                        prev_nf_type = nf.get("type", "string")
+                        nf["type"] = r[1].selectbox("Type", ["string", "number", "boolean"], key=f"bp_n_type_{pid}_{nid}", index=["string", "number", "boolean"].index(prev_nf_type) if prev_nf_type in ("string", "number", "boolean") else 0)
+                        if nf["type"] != prev_nf_type:
+                            nf["value"] = "Any" if nf["type"] == "boolean" else ""
+                            nf.pop("regex", None)
+
+                        if nf["type"] == "boolean":
+                            nf["mode"] = "Value"
+                        else:
+                            nf["mode"] = r[2].selectbox("Validation", ["Value", "Regex"], key=f"bp_n_mode_{pid}_{nid}_{nf['type']}", index=0 if nf.get("mode", "Value") == "Value" else 1)
+
                         if nf["mode"] == "Value":
                             if nf["type"] == "boolean":
-                                nf["value"] = r[3].selectbox("Value", ["true", "false", "Any"], key=f"bp_n_val_{pid}_{nid}", index=["true", "false", "Any"].index(str(nf.get("value", "Any")).lower()) if str(nf.get("value", "Any")).lower() in ["true", "false", "Any"] else 2)
+                                nf["value"] = r[3].selectbox("Value", ["true", "false", "Any"], key=f"bp_n_val_{pid}_{nid}_{nf['type']}", index=["true", "false", "Any"].index(str(nf.get("value", "Any")).lower()) if str(nf.get("value", "Any")).lower() in ["true", "false", "Any"] else 2)
                             elif nf["type"] == "number":
                                 v = nf.get("value")
                                 num_v = str(v) if v is not None and str(v).strip() != "" else ""
-                                nf["value"] = r[3].text_input("Value", value=num_v, placeholder="empty", key=f"bp_n_val_{pid}_{nid}")
+                                nf["value"] = r[3].text_input("Value", value=num_v, placeholder="empty", key=f"bp_n_val_{pid}_{nid}_{nf['type']}")
                                 if isinstance(nf["value"], str) and nf["value"].strip() != "":
                                     try: float(nf["value"])
                                     except: r[3].error("Invalid number", icon="⚠️")
                             else:
-                                nf["value"] = r[3].text_input("Value", nf.get("value", ""), key=f"bp_n_val_{pid}_{nid}")
+                                nf["value"] = r[3].text_input("Value", nf.get("value", ""), placeholder="empty", key=f"bp_n_val_{pid}_{nid}_{nf['type']}")
                         else:
                             nf["regex"] = r[3].text_input("Regex", nf.get("regex", ""), key=f"bp_n_regex_{pid}_{nid}")
 
-                        r[4].button("❌", key=f"bp_n_del_{pid}_{nid}", on_click=delete_nested_bulk, args=(pid, nid))
+                        r[4].button("X", key=f"bp_n_del_{pid}_{nid}", on_click=delete_nested_bulk, args=(pid, nid))
                         nf["description"] = st.text_area("Description", nf.get("description", ""), key=f"bp_n_desc_{pid}_{nid}", height=68)
                         st.divider()
                     
@@ -495,25 +600,39 @@ def confirm_update_dialog(full_schema_map, param_name):
             st.session_state[f"chk_{s_name}"] = b_val
 
     st.checkbox("Select / Deselect all schemas", value=True, key="master_toggle_schemas", on_change=toggle_all)
-    
-    # Selection State initialization
-    selected_schemas = []
-    
+
+    search_query = st.text_input("Search schemas", key="confirm_update_search", placeholder="Filter by schema name…")
+    filtered_schema_map = {
+        name: data for name, data in full_schema_map.items()
+        if search_query.lower() in name.lower()
+    } if search_query else full_schema_map
+    if search_query and not filtered_schema_map:
+        st.caption(f"No schemas match '{search_query}'.")
+
     # We need keys for checkboxes.
-    for schema_name, data in full_schema_map.items():
+    for schema_name, data in filtered_schema_map.items():
         # Checkbox for each schema
         # Use a container to group checkbox and expander
         c1, c2 = st.columns([0.1, 0.9])
         with c1:
-            # use master toggle as default if state not set
-            def_val = st.session_state.get("master_toggle_schemas", True)
-            is_checked = st.checkbox("Select Schema", value=def_val, key=f"chk_{schema_name}", label_visibility="collapsed")
-            if is_checked:
-                selected_schemas.append(schema_name)
+            # Seed initial state via setdefault only — toggle_all() sets
+            # these directly via the Session State API, so the widget must
+            # not also receive a `value=` default (Streamlit warns/conflicts
+            # when both happen for the same key).
+            st.session_state.setdefault(f"chk_{schema_name}", st.session_state.get("master_toggle_schemas", True))
+            st.checkbox("Select Schema", key=f"chk_{schema_name}", label_visibility="collapsed")
         with c2:
             with st.expander(f"Review: {schema_name}", expanded=False):
                 render_diff_ui(data["original"], data["new"], param_name)
     
+    # Read selection from the full map, not just what the search filter
+    # rendered this pass — otherwise selecting a schema then filtering it
+    # out of view would silently drop it before Confirm & Update.
+    selected_schemas = [
+        name for name in full_schema_map.keys()
+        if st.session_state.get(f"chk_{name}", st.session_state.get("master_toggle_schemas", True))
+    ]
+
     # ---------------------------------------------------------
     # CLEANUP HELPER
     def cleanup_confirmation():
@@ -521,6 +640,8 @@ def confirm_update_dialog(full_schema_map, param_name):
             del st.session_state.pending_confirmation
         if "master_toggle_schemas" in st.session_state:
             del st.session_state.master_toggle_schemas
+        if "confirm_update_search" in st.session_state:
+            del st.session_state.confirm_update_search
         for k in list(st.session_state.keys()):
             if isinstance(k, str) and k.startswith("chk_"):
                 del st.session_state[k]
@@ -586,7 +707,6 @@ def edit_param_dialog(param_name):
     current_type = param.get("type", "string")
     current_type_index = typeOptions.index(current_type) if current_type in typeOptions else 0
     current_category = param.get("category", "")
-    current_cat_index = get_available_categories().index(current_category) if current_category in get_available_categories() else 0
     current_description = param.get("description", "")
 
     new_type = st.selectbox(
@@ -599,39 +719,70 @@ def edit_param_dialog(param_name):
     new_value = None
     new_regex = None
     if new_type != "array":
-        mode = st.radio("Validation Type", ["Fixed Value", "Regex Pattern"], 
-                        index=1 if current_regex else 0, horizontal=True,
-                        key=f"edit-{param_name}-mode")
-        
-        if mode == "Fixed Value":
+        current_has_default = bool(current_regex) or (
+            str(current_value).strip() != "" and not (new_type == "boolean" and str(current_value).lower() == "any")
+        )
+        set_default = st.radio(
+            "Does this parameter have a default value?",
+            ["No default value", "Set a default value"],
+            index=1 if current_has_default else 0,
+            horizontal=True,
+            key=f"edit-{param_name}-has-default",
+        ) == "Set a default value"
+
+        if set_default:
             if new_type == "boolean":
-                opts = ["true", "false", "Any"]
-                cv_str = str(current_value).lower()
-                curr_val_idx = opts.index(cv_str) if cv_str in opts else 2
-                new_value = st.selectbox("Value", opts, index=curr_val_idx, key=f"edit_{param_name}-value-bool")
-            elif new_type == "number":
-                num_k = f"edit_{param_name}-value-num"
-                if num_k in st.session_state:
-                    curr_num = st.session_state[num_k]
-                else:
-                    curr_num = str(current_value) if current_value is not None and str(current_value).strip() != "" else ""
-                new_value = st.text_input("Value", value=curr_num, placeholder="empty", key=num_k)
-                if isinstance(new_value, str) and new_value.strip() != "":
-                    try: float(new_value)
-                    except: st.error("Invalid number", icon="⚠️")
+                mode = "Fixed Value"
             else:
-                text_k = f"edit_{param_name}-value"
-                if text_k in st.session_state:
-                    curr_text = st.session_state[text_k]
+                mode = st.radio("Validation Type", ["Fixed Value", "Regex Pattern"],
+                                index=1 if current_regex else 0, horizontal=True,
+                                key=f"edit-{param_name}-mode")
+
+            if mode == "Fixed Value":
+                if new_type == "boolean":
+                    opts = ["true", "false", "Any"]
+                    cv_str = str(current_value).lower()
+                    curr_val_idx = opts.index(cv_str) if cv_str in opts else 2
+                    new_value = st.selectbox(
+                        "Default Value", opts, index=curr_val_idx, key=f"edit_{param_name}-value-bool",
+                        help="Choose 'Any' if this parameter has no default value.",
+                    )
+                elif new_type == "number":
+                    num_k = f"edit_{param_name}-value-num"
+                    if num_k in st.session_state:
+                        curr_num = st.session_state[num_k]
+                    else:
+                        curr_num = str(current_value) if current_value is not None and str(current_value).strip() != "" else ""
+                    new_value = st.text_input(
+                        "Default Value", value=curr_num, placeholder="empty", key=num_k,
+                        help="Leave empty if this parameter has no default value.",
+                    )
+                    if isinstance(new_value, str) and new_value.strip() != "":
+                        try: float(new_value)
+                        except: st.error("Invalid number", icon="⚠️")
                 else:
-                    curr_text = current_value if current_value else ""
-                new_value = st.text_input(
-                    "Value",
-                    value=curr_text,
-                    key=text_k
+                    text_k = f"edit_{param_name}-value"
+                    if text_k in st.session_state:
+                        curr_text = st.session_state[text_k]
+                    else:
+                        curr_text = current_value if current_value else ""
+                    new_value = st.text_input(
+                        "Default Value",
+                        value=curr_text,
+                        placeholder="empty",
+                        help="Leave empty if this parameter has no default value.",
+                        key=text_k
+                    )
+            else:
+                new_regex = st.text_input(
+                    "Regex Pattern", value=current_regex, key=f"edit_{param_name}-regex",
+                    help="Standard JavaScript regex pattern — no leading/trailing `/`. "
+                         "Example: `^[A-Z]{2}\\d{4}$` matches two uppercase letters followed by 4 digits.",
                 )
         else:
-            new_regex = st.text_input("Regex Pattern", value=current_regex, key=f"edit_{param_name}-regex")
+            mode = "Fixed Value"
+            new_value = "Any" if new_type == "boolean" else ""
+            st.caption("No default value or pattern will be set for this parameter.")
     else:
         st.caption("Nested fields for Array:")
         edit_nested = st.session_state[nested_state_key]
@@ -639,41 +790,57 @@ def edit_param_dialog(param_name):
         for nid, nf in edit_nested.items():
             r = st.columns([3, 2, 2, 2, 1])
             nf["key"] = r[0].text_input("Key", nf.get("key", ""), key=f"ed_nk_{param_name}_{nid}")
-            nf["type"] = r[1].selectbox("Type", ["string", "number", "boolean"], index=["string", "number", "boolean"].index(nf.get("type", "string")), key=f"ed_nt_{param_name}_{nid}")
-            
-            nest_mode = r[2].selectbox("Validation", ["Value", "Regex"], key=f"ed_mode_{param_name}_{nid}", index=1 if nf.get("regex") else 0)
+
+            prev_n_type = nf.get("type", "string")
+            nf["type"] = r[1].selectbox(
+                "Type", ["string", "number", "boolean"],
+                index=["string", "number", "boolean"].index(prev_n_type) if prev_n_type in ("string", "number", "boolean") else 0,
+                key=f"ed_nt_{param_name}_{nid}",
+            )
+            # Switching type must drop the old value/regex — otherwise a
+            # leftover boolean value like "Any" silently becomes the string
+            # default (no error, since any text is a "valid" string) instead
+            # of being reset. Type-scoped widget keys below back this up by
+            # never reusing another type's committed widget state.
+            if nf["type"] != prev_n_type:
+                nf["value"] = "Any" if nf["type"] == "boolean" else ""
+                nf.pop("regex", None)
+
+            if nf["type"] == "boolean":
+                nest_mode = "Value"
+            else:
+                nest_mode = r[2].selectbox(
+                    "Validation", ["Value", "Regex"],
+                    key=f"ed_mode_{param_name}_{nid}_{nf['type']}",
+                    index=1 if nf.get("regex") else 0,
+                )
             if nest_mode == "Value":
                 if nf["type"] == "boolean":
                      opts = ["true", "false", "Any"]
                      cval = str(nf.get("value", "Any")).lower()
                      cidx = opts.index(cval) if cval in opts else 2
-                     nf["value"] = r[3].selectbox("Value", opts, index=cidx, key=f"ed_nv_{param_name}_{nid}")
+                     nf["value"] = r[3].selectbox("Value", opts, index=cidx, key=f"ed_nv_{param_name}_{nid}_{nf['type']}")
                 elif nf["type"] == "number":
                      v = nf.get("value")
                      num_v = str(v) if v is not None and str(v).strip() != "" else ""
-                     nf["value"] = r[3].text_input("Value", value=num_v, placeholder="empty", key=f"ed_nv_{param_name}_{nid}")
+                     nf["value"] = r[3].text_input("Value", value=num_v, placeholder="empty", key=f"ed_nv_{param_name}_{nid}_{nf['type']}")
                      if isinstance(nf["value"], str) and nf["value"].strip() != "":
                          try: float(nf["value"])
                          except: r[3].error("Invalid number", icon="⚠️")
                 else:
-                     nf["value"] = r[3].text_input("Value", nf.get("value", ""), key=f"ed_nv_{param_name}_{nid}")
+                     nf["value"] = r[3].text_input("Value", nf.get("value", ""), placeholder="empty", key=f"ed_nv_{param_name}_{nid}_{nf['type']}")
                 nf.pop("regex", None)
             else:
                 nf["regex"] = r[3].text_input("Regex Pattern", nf.get("regex", ""), key=f"ed_nr_{param_name}_{nid}")
                 nf.pop("value", None)
                  
-            r[4].button("❌", key=f"ed_del_{param_name}_{nid}", on_click=delete_nested_edit, args=(param_name, nid))
+            r[4].button("X", key=f"ed_del_{param_name}_{nid}", on_click=delete_nested_edit, args=(param_name, nid))
             nf["description"] = st.text_area("Description", nf.get("description", ""), key=f"ed_nd_{param_name}_{nid}", height=68)
             st.markdown("---")
             
         st.button("➕ Add nested key", key=f"ed_add_{param_name}", on_click=add_nested_edit, args=(param_name,))
 
-    new_category = st.selectbox(
-        "Category",
-        options=get_available_categories(),
-        key=f"edit-{param_name}-category",
-        index=current_cat_index, 
-    )
+    new_category = render_category_picker(st, current_category, f"edit-{param_name}-category")
     new_description = st.text_area(
         "Description",
         key=f"edit-{param_name}-description",
@@ -764,14 +931,28 @@ def edit_param_dialog(param_name):
                 original_contents = read_schemas_parallel(full_names)
                 
                 # PROCESS LOCALLY (INSTANT)
-                new_props = construct_schema_definition(draft_param_data)
+                repo_new_props = construct_schema_definition(draft_param_data)
                 for full_name, orig_data in original_contents.items():
                     if not orig_data: continue
-                    
+
                     new_schema_data = copy.deepcopy(orig_data)
                     if param_name in new_schema_data:
-                        new_schema_data[param_name] = new_props
-                        
+                        # Repo wins on value/regex/Contains; the schema's own
+                        # Optional/Conditional rules are always kept, since
+                        # the repo has no concept of them at all.
+                        new_schema_data[param_name] = preserve_schema_customization(
+                            orig_data.get(param_name, {}), repo_new_props
+                        )
+
+                    # Skip schemas the edit wouldn't actually change — e.g.
+                    # editing only the parameter's category, which never
+                    # appears in the exported schema JSON at all. Without
+                    # this, every impacted schema shows up in Confirm Schema
+                    # Updates even when its "new" JSON is byte-for-byte
+                    # identical to "original".
+                    if new_schema_data.get(param_name) == orig_data.get(param_name):
+                        continue
+
                     full_schema_map[full_name] = {
                         "original": orig_data,
                         "new": new_schema_data
