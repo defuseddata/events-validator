@@ -43,10 +43,17 @@ def find_empty_match_value_errors(schema):
             continue
         if field.get("type") == "array":
             array_name = field.get("key", "")
-            for nf in (field.get("nestedSchema") or {}).values():
+            for nid, nf in (field.get("nestedSchema") or {}).items():
                 if nf.get("type") in ("boolean", "number", "object"):
                     continue
                 if "value" not in nf and "value_contains" not in nf:
+                    continue
+                # An empty "value" only means a check when its toggle is on;
+                # inside a collapsed array the toggle isn't rendered, so the
+                # empty value is just the unnormalized "type only" state.
+                epoch = st.session_state.get(f"arr_nested_reset_epoch_{field_id}_{nid}", 0)
+                toggle_on = st.session_state.get(f"arr_nested_check_value_{field_id}_{nid}_{epoch}")
+                if "value_contains" not in nf and not toggle_on:
                     continue
                 val = nf.get("value_contains") if "value_contains" in nf else nf.get("value", "")
                 if not str(val or "").strip():
@@ -730,6 +737,7 @@ def render_builder():
         )
         if st.button("✏️ Change name", key="change_event_name_btn"):
             st.session_state.event_name = ""
+            st.session_state.pop("loaded_schema_name", None)
             st.rerun()
 
     existing_schema_files = set(list_schemas())
@@ -854,7 +862,7 @@ def render_builder():
 
             if success:
                 st.session_state.upload_status = True
-                st.session_state.loaded_schema_name = event_name
+                st.session_state.loaded_schema_name = event_name.strip()
                 # Update repo with schema usage
                 update_repo_with_schema_usage(event_name, data)
                 # Clear cache to refresh explorer
