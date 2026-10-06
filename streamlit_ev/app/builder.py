@@ -733,6 +733,9 @@ def render_builder():
             st.rerun()
 
     existing_schema_files = set(list_schemas())
+    current_name = st.session_state.event_name.strip()
+    if current_name and current_name != st.session_state.get("loaded_schema_name"):
+        st.session_state.pop("loaded_schema_name", None)
     is_editing_loaded_schema = (
         st.session_state.event_name.strip()
         and st.session_state.event_name.strip() == st.session_state.get("loaded_schema_name")
