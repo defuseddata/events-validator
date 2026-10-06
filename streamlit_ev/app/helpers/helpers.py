@@ -406,15 +406,10 @@ def update_repo_with_schema_usage(schema_name, schema_export_data):
         return
 
     current_fields = set()
-    for field_name, field_props in schema_export_data.items():
+    for field_name in schema_export_data:
         if field_name in ("event_name", "version"):
             continue
         current_fields.add(field_name)
-        # A repo parameter can also be used as a nested key inside an
-        # array-type field (e.g. item_id/item_name nested under "items") —
-        # those need to count as "used" too, not just top-level fields.
-        if isinstance(field_props, dict) and field_props.get("type") == "array":
-            current_fields.update((field_props.get("nestedSchema") or {}).keys())
 
     updated = False
 

@@ -103,7 +103,10 @@ def render_category_picker(container, current_category, key_prefix):
         typed = container.text_input(
             "New category name", key=f"{key_prefix}_new_name", placeholder="e.g. Marketing",
         ).strip()
-        if typed and typed.lower() in _RESERVED_CATEGORY_NAMES:
+        if not typed:
+            container.caption("Type a name for the new category. Until then the previous category is kept.")
+            return current_category
+        if typed.lower() in _RESERVED_CATEGORY_NAMES:
             container.error(f"'{typed}' is a reserved name and can't be used as a category. Keeping the previous category.")
             return current_category
         return typed
