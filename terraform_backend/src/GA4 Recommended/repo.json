@@ -55,18 +55,9 @@
     "usedInSchemas": [
       "add_payment_info",
       "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
       "begin_checkout",
       "purchase",
-      "refund",
-      "remove_from_cart",
-      "select_item",
-      "select_promotion",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
+      "refund"
     ]
   },
   "payment_type": {
@@ -103,21 +94,7 @@
     "description": "The ID of the item. *One of item_id or item_name is required.",
     "category": "GA4 Recommended",
     "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
-      "select_item",
-      "select_promotion",
-      "share",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
+      "share"
     ]
   },
   "item_name": {
@@ -125,231 +102,70 @@
     "description": "The name of the item. *One of item_id or item_name is required.",
     "category": "GA4 Recommended",
     "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
-      "select_item",
-      "select_promotion",
-      "spend_virtual_currency",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
+      "spend_virtual_currency"
     ]
   },
   "affiliation": {
     "type": "string",
     "description": "A product affiliation to designate a supplying company or brick and mortar store location. Note: `affiliation` is only available at the item-scope.",
     "category": "GA4 Recommended",
-    "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
-      "select_item",
-      "select_promotion",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
-    ]
+    "usedInSchemas": []
   },
   "discount": {
     "type": "number",
     "description": "The unit monetary discount value associated with the item.",
     "category": "GA4 Recommended",
-    "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
-      "select_item",
-      "select_promotion",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
-    ]
+    "usedInSchemas": []
   },
   "index": {
     "type": "number",
     "description": "The index/position of the item in a list.",
     "category": "GA4 Recommended",
-    "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
-      "select_item",
-      "select_promotion",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
-    ]
+    "usedInSchemas": []
   },
   "item_brand": {
     "type": "string",
     "description": "The brand of the item.",
     "category": "GA4 Recommended",
-    "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
-      "select_item",
-      "select_promotion",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
-    ]
+    "usedInSchemas": []
   },
   "item_category": {
     "type": "string",
     "description": "The category of the item. If used as part of a category hierarchy or taxonomy then this will be the first category.",
     "category": "GA4 Recommended",
-    "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
-      "select_item",
-      "select_promotion",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
-    ]
+    "usedInSchemas": []
   },
   "item_category2": {
     "type": "string",
     "description": "The second category hierarchy or additional taxonomy for the item.",
     "category": "GA4 Recommended",
-    "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
-      "select_item",
-      "select_promotion",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
-    ]
+    "usedInSchemas": []
   },
   "item_category3": {
     "type": "string",
     "description": "The third category hierarchy or additional taxonomy for the item.",
     "category": "GA4 Recommended",
-    "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
-      "select_item",
-      "select_promotion",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
-    ]
+    "usedInSchemas": []
   },
   "item_category4": {
     "type": "string",
     "description": "The fourth category hierarchy or additional taxonomy for the item.",
     "category": "GA4 Recommended",
-    "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
-      "select_item",
-      "select_promotion",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
-    ]
+    "usedInSchemas": []
   },
   "item_category5": {
     "type": "string",
     "description": "The fifth category hierarchy or additional taxonomy for the item.",
     "category": "GA4 Recommended",
-    "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
-      "select_item",
-      "select_promotion",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
-    ]
+    "usedInSchemas": []
   },
   "item_list_id": {
     "type": "string",
     "description": "The ID of the list in which the item was presented to the user. If set, event-level item_list_id is ignored. If not set, event-level item_list_id is used, if present.",
     "category": "GA4 Recommended",
     "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
       "select_item",
-      "select_promotion",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
+      "view_item_list"
     ]
   },
   "item_list_name": {
@@ -357,105 +173,33 @@
     "description": "The name of the list in which the item was presented to the user. If set, event-level item_list_name is ignored. If not set, event-level item_list_name is used, if present.",
     "category": "GA4 Recommended",
     "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
       "select_item",
-      "select_promotion",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
+      "view_item_list"
     ]
   },
   "item_variant": {
     "type": "string",
     "description": "The item variant or unique code or description for additional item details/options.",
     "category": "GA4 Recommended",
-    "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
-      "select_item",
-      "select_promotion",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
-    ]
+    "usedInSchemas": []
   },
   "location_id": {
     "type": "string",
     "description": "The physical location associated with the item (e.g. the physical store location). It's recommended to use the Google Place ID that corresponds to the associated item. A custom location ID can also be used. Note: `location id` is only available at the item-scope.",
     "category": "GA4 Recommended",
-    "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
-      "select_item",
-      "select_promotion",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
-    ]
+    "usedInSchemas": []
   },
   "price": {
     "type": "number",
     "description": "The monetary unit price of the item, in units of the specified currency parameter. If a discount applies to the item, set price to the discounted unit price and specify the unit price discount in the discount parameter.",
     "category": "GA4 Recommended",
-    "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
-      "select_item",
-      "select_promotion",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
-    ]
+    "usedInSchemas": []
   },
   "quantity": {
     "type": "number",
     "description": "Item quantity. If not set, quantity is set to 1.",
     "category": "GA4 Recommended",
-    "usedInSchemas": [
-      "add_payment_info",
-      "add_shipping_info",
-      "add_to_cart",
-      "add_to_wishlist",
-      "begin_checkout",
-      "purchase",
-      "refund",
-      "remove_from_cart",
-      "select_item",
-      "select_promotion",
-      "view_cart",
-      "view_item",
-      "view_item_list",
-      "view_promotion"
-    ]
+    "usedInSchemas": []
   },
   "shipping_tier": {
     "type": "string",
