@@ -29,6 +29,17 @@ load_dotenv()
 repo_file_name = os.getenv("REPO_JSON_FILE") or "repo.json"
 typeOptions = ["string", "number", "boolean", "array"]
 
+_MARKDOWN_SPECIAL_CHARS = r"\`*_{}[]()#+-.!|>~"
+
+def md_escape(text):
+    """Escapes Markdown special characters so free-text repo fields (typed by
+    any user with repo-edit access) render as literal text in st.markdown
+    instead of being interpreted as headings, links, or colored spans."""
+    text = str(text)
+    for ch in _MARKDOWN_SPECIAL_CHARS:
+        text = text.replace(ch, "\\" + ch)
+    return text
+
 def clean_repo_types(repo):
     """Ensures numeric values are stored as numbers, not strings."""
     for param in repo.values():
@@ -93,8 +104,8 @@ def render_category_picker(container, current_category, key_prefix):
             "New category name", key=f"{key_prefix}_new_name", placeholder="e.g. Marketing",
         ).strip()
         if typed and typed.lower() in _RESERVED_CATEGORY_NAMES:
-            container.error(f"'{typed}' is a reserved name and can't be used as a category.")
-            return ""
+            container.error(f"'{typed}' is a reserved name and can't be used as a category. Keeping the previous category.")
+            return current_category
         return typed
     return choice
 
@@ -185,11 +196,11 @@ def render_repo():
 
                 with cols[0]:
                     st.markdown(
-                        f"**Type:** {param.get('type', '')}  \n"
-                        f"**Default Value:** {param.get('value', '')}  \n"
-                        f"**Category:** {param.get('category', '')}  \n"
-                        f"**Description:** {param.get('description', '')}  \n"
-                        f"**Used In:** {json.dumps(param.get('usedInSchemas', ''))}"
+                        f"**Type:** {md_escape(param.get('type', ''))}  \n"
+                        f"**Default Value:** {md_escape(param.get('value', ''))}  \n"
+                        f"**Category:** {md_escape(param.get('category', ''))}  \n"
+                        f"**Description:** {md_escape(param.get('description', ''))}  \n"
+                        f"**Used In:** {md_escape(json.dumps(param.get('usedInSchemas', '')))}"
                     )
                 with cols[1]:
                     st.json(param, expanded=False)
@@ -848,13 +859,14 @@ def edit_param_dialog(param_name):
         placeholder="Describe what this parameter means, how it's used, constraints, notes…"
     )
     
-    # TYPE CHANGE RESET LOGIC
+    # TYPE CHANGE NOTICE — the value/regex widgets above already use
+    # type-scoped keys (e.g. "...-value-bool" / "...-value-num"), so they
+    # already show a fresh, type-appropriate default the moment the type
+    # changes. This used to also overwrite new_value with a hardcoded
+    # placeholder here, which clobbered whatever the user had just typed
+    # into that same-render widget — removed.
     if new_type != current_type:
-        st.info(f"💡 Type changed from `{current_type}` to `{new_type}`. Default value will be reset to a safe type-compliant placeholder upon saving.")
-        if new_type == "number": new_value = 0
-        elif new_type == "boolean": new_value = "Any"
-        elif new_type == "array": new_value = None
-        else: new_value = ""
+        st.info(f"💡 Type changed from `{current_type}` to `{new_type}`.")
 
     if st.button("Save"):
         if new_type == "number" and mode == "Fixed Value":

@@ -89,6 +89,8 @@ function checkLength(schemaObject, key, dataToValidate, parentPath = '', eventNa
 
 function checkValue(schemaObject, key, dataToValidate, parentPath = '', eventName, eventId, rootData) {
 	const expected = schemaObject[key].value;
+	if (expected === null) return;
+
 	const actual = dataToValidate[key];
 	const fieldPath = parentPath ? `${parentPath}.${key}` : key;
 	const _root = rootData || dataToValidate;
@@ -203,7 +205,7 @@ function checkWithSchema(schemaObject, dataToValidate, parentPath = '', eventNam
 			continue;
 		}
 
-		if (rule.hasOwnProperty('value') && rule.value !== null)
+		if (rule.hasOwnProperty('value'))
 			checkValue(schemaObject, key, dataToValidate, parentPath, eventName, eventId, _root);
 		if (rule.hasOwnProperty('value_contains'))
 			checkValueContains(schemaObject, key, dataToValidate, parentPath, eventName, eventId, _root);

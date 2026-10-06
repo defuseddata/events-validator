@@ -394,25 +394,6 @@ def convert_repo_param_to_internal(param_name: str, param_obj: dict):
 
     return field
 
-def add_schema_name_to_param_in_repo(param_name, schema_name):
-    repo = st.session_state.get("repo", {})
-
-    if param_name not in repo:
-        return
-
-    param = repo[param_name]
-
-    if "usedInSchemas" not in param:
-        param["usedInSchemas"] = []
-
-    if schema_name not in param["usedInSchemas"]:
-        param["usedInSchemas"].append(schema_name)
-
-
-    write_repo(repo, commit_message="Update schema usage tracking")
-
-
-
 def update_repo_with_schema_usage(schema_name, schema_export_data):
     """Reconciles every repo parameter's usedInSchemas against this schema's
     CURRENT fields — both adding newly-used params and removing schema_name
