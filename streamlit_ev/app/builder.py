@@ -31,6 +31,20 @@ def values_match(v1, v2, p_type):
     return str(v1) == str(v2)
 
 
+VALUE_KEYS = ("value", "value_contains", "value_contains_case_sensitive")
+
+
+def render_pattern_notice(container, field):
+    """Fields with a regex are pattern-validated; Exact/Contains don't apply. Returns True if the field was cleaned."""
+    container.space("small")
+    container.caption(f"Regex pattern from repo: `{field['regex']}`. Value checks are not used for pattern fields.")
+    if any(k in field for k in VALUE_KEYS):
+        for k in VALUE_KEYS:
+            field.pop(k, None)
+        return True
+    return False
+
+
 def has_value_check(field):
     return "value_contains" in field or field.get("value", "") not in ("", None)
 
@@ -44,7 +58,7 @@ def find_empty_match_value_errors(schema):
         if field.get("type") == "array":
             array_name = field.get("key", "")
             for nid, nf in (field.get("nestedSchema") or {}).items():
-                if nf.get("type") in ("boolean", "number", "object"):
+                if nf.get("type") in ("boolean", "number", "object") or nf.get("regex"):
                     continue
                 if "value" not in nf and "value_contains" not in nf:
                     continue
@@ -58,7 +72,7 @@ def find_empty_match_value_errors(schema):
                 val = nf.get("value_contains") if "value_contains" in nf else nf.get("value", "")
                 if not str(val or "").strip():
                     errors.append(f"{array_name}.{nf.get('key', '')}")
-        elif field.get("type") not in ("array", "boolean", "number"):
+        elif field.get("type") not in ("array", "boolean", "number") and not field.get("regex"):
             if "value" not in field and "value_contains" not in field:
                 continue
             val = field.get("value_contains") if "value_contains" in field else field.get("value", "")
@@ -141,6 +155,9 @@ def render_schema_param(field_id, field):
                 except ValueError:
                     st.error("Invalid number")
             st.session_state.schema[field_id] = field
+    elif field.get("regex"):
+        if render_pattern_notice(cols[2], field):
+            st.session_state.schema[field_id] = field
     else:
         with cols[2]:
             check_value = st.toggle(
@@ -213,6 +230,7 @@ def render_schema_param(field_id, field):
         cols[0].caption(":gray[Differs from what's currently in the repo for this parameter (no default set there). Click ↺ to revert.]")
 
     # Actions: Reset and Delete (icon-only — column is too narrow for "Reset" as text)
+    cols[3].space("small")  # push the buttons down to the input row (below the widget labels)
     if differs_from_repo:
         if cols[3].button("↺", key=f"schema_reset_{field_id}", help="Revert to repo's current value"):
             field["value"] = repo_default
@@ -456,6 +474,9 @@ def render_array_param(field_id, field):
                 st.session_state.schema[field_id]["nestedSchema"][nid] = nf
         elif nf.get("type") == "object":
             cols[2].markdown("—")
+        elif nf.get("regex"):
+            if render_pattern_notice(cols[2], nf):
+                st.session_state.schema[field_id]["nestedSchema"][nid] = nf
         else:
             with cols[2]:
                 n_check_value = st.toggle(
@@ -524,6 +545,7 @@ def render_array_param(field_id, field):
             cols[0].caption(":gray[Differs from what's currently in the repo for this key (no default set there). Click ↺ to revert.]")
 
         if n_differs_from_repo:
+            cols[3].space("small")
             if cols[3].button("↺", key=f"arr_nested_reset_{field_id}_{nid}", help="Revert to repo's current value"):
                 nf["value"] = r_val
                 nf.pop("value_contains", None)
