@@ -79,6 +79,9 @@ def convert_export_to_internal(export):
             "validate_if_present": props.get("validate_if_present", ""),
             "validate_if": props.get("validate_if", {})
         }
+        if "value_contains" in props:
+            field["value_contains"] = props.get("value_contains", "")
+            field["value_contains_case_sensitive"] = props.get("value_contains_case_sensitive", True)
 
         # array
         if props.get("type") == "array" and "nestedSchema" in props:
@@ -95,6 +98,9 @@ def convert_export_to_internal(export):
                     "validate_if_present": np.get("validate_if_present", ""),
                     "validate_if": np.get("validate_if", {})
                 }
+                if "value_contains" in np:
+                    nested[i]["value_contains"] = np.get("value_contains", "")
+                    nested[i]["value_contains_case_sensitive"] = np.get("value_contains_case_sensitive", True)
                 i += 1
             field["nestedSchema"] = nested
 
@@ -155,10 +161,14 @@ def export_schema():
                         val = float(val) if "." in val else int(val)
                     except (ValueError, TypeError):
                         pass
+                elif field["type"] == "boolean" and isinstance(val, str):
+                    val = val.strip().lower() == "true"
                 props["value"] = val
 
             if field.get("value_contains") not in ("", None, []):
                 props["value_contains"] = field["value_contains"]
+                if field.get("value_contains_case_sensitive") is False:
+                    props["value_contains_case_sensitive"] = False
 
             if field.get("regex") not in ("", None, []):
                 props["regex"] = field["regex"]
@@ -186,10 +196,14 @@ def export_schema():
                             nv = float(nv) if "." in nv else int(nv)
                         except (ValueError, TypeError):
                             pass
+                    elif nested.get("type") == "boolean" and isinstance(nv, str):
+                        nv = nv.strip().lower() == "true"
                     np["value"] = nv
 
                 if nested.get("value_contains") not in ("", None, []):
                     np["value_contains"] = nested["value_contains"]
+                    if nested.get("value_contains_case_sensitive") is False:
+                        np["value_contains_case_sensitive"] = False
 
                 # Add Optional & Conditional (Nested)
                 if nested.get("optional"):
@@ -380,48 +394,37 @@ def convert_repo_param_to_internal(param_name: str, param_obj: dict):
 
     return field
 
-def add_schema_name_to_param_in_repo(param_name, schema_name):
-    repo = st.session_state.get("repo", {})
-
-    if param_name not in repo:
-        return
-
-    param = repo[param_name]
-
-    if "usedInSchemas" not in param:
-        param["usedInSchemas"] = []
-
-    if schema_name not in param["usedInSchemas"]:
-        param["usedInSchemas"].append(schema_name)
-
-
-    write_repo(repo, commit_message="Update schema usage tracking")
-
-
-
 def update_repo_with_schema_usage(schema_name, schema_export_data):
+    """Reconciles every repo parameter's usedInSchemas against this schema's
+    CURRENT fields — both adding newly-used params and removing schema_name
+    from params no longer present. Only ever appending (never removing) left
+    stale entries behind forever once a field was deleted and the schema
+    re-saved: e.g. a parameter would keep listing a schema it was removed
+    from, with no way for that to self-correct."""
     repo = st.session_state.get("repo", {})
     if not repo:
         return
 
-    updated = False
-    
-    # Przejdź przez wszystkie pola w schemacie
-    for field_name, field_props in schema_export_data.items():
+    current_fields = set()
+    for field_name in schema_export_data:
         if field_name in ("event_name", "version"):
             continue
+        current_fields.add(field_name)
 
-        # Jeśli nazwa pola jest też nazwą parametru w repo
-        if field_name in repo:
-            param = repo[field_name]
-            if "usedInSchemas" not in param:
-                param["usedInSchemas"] = []
-            
-            # Dodaj nazwę schematu jeśli nie ma
-            if schema_name not in param["usedInSchemas"]:
-                param["usedInSchemas"].append(schema_name)
-                updated = True
-    
+    updated = False
+
+    for param_name, param in repo.items():
+        used = param.get("usedInSchemas", [])
+        is_listed = schema_name in used
+        should_be_listed = param_name in current_fields
+
+        if should_be_listed and not is_listed:
+            param.setdefault("usedInSchemas", []).append(schema_name)
+            updated = True
+        elif is_listed and not should_be_listed:
+            param["usedInSchemas"] = [s for s in used if s != schema_name]
+            updated = True
+
     if updated:
         st.session_state.repo = repo
         write_repo(repo, commit_message="Update schema usage tracking")
@@ -429,6 +432,7 @@ def readSchemaAndSetState(schema_data):
     internal = convert_export_to_internal(schema_data)
     st.session_state.schema = internal
     st.session_state.event_name = internal[0]["value"]
+    st.session_state.loaded_schema_name = internal[0]["value"]
     st.session_state.schema_version = internal[1]["value"]
     st.session_state.toast_message = "Schema loaded into builder."
     st.session_state.page = "builder"

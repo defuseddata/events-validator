@@ -7,7 +7,6 @@ from helpers.helpers import (
     toggle_expand_schema_builder,
     next_id_for_schema,
     convert_repo_param_to_internal,
-    add_schema_name_to_param_in_repo,
     pretty_schema_inline,
     update_repo_with_schema_usage
 )
@@ -18,8 +17,69 @@ from helpers.storage import (
     is_github_mode,
     get_current_branch,
     clear_cache,
+    list_schemas,
 )
 from helpers.components import render_branch_selector, render_storage_status
+
+def values_match(v1, v2, p_type):
+    """Numeric-aware equality: '1' and '1.0' match for number fields."""
+    if p_type == "number":
+        try:
+            return float(v1) == float(v2)
+        except (TypeError, ValueError):
+            return str(v1) == str(v2)
+    return str(v1) == str(v2)
+
+
+VALUE_KEYS = ("value", "value_contains", "value_contains_case_sensitive")
+
+
+def render_pattern_notice(container, field):
+    """Fields with a regex are pattern-validated; Exact/Contains don't apply. Returns True if the field was cleaned."""
+    container.space("small")
+    container.caption(f"Regex pattern from repo: `{field['regex']}`. Value checks are not used for pattern fields.")
+    if any(k in field for k in VALUE_KEYS):
+        for k in VALUE_KEYS:
+            field.pop(k, None)
+        return True
+    return False
+
+
+def has_value_check(field):
+    return "value_contains" in field or field.get("value", "") not in ("", None)
+
+
+def find_empty_match_value_errors(schema):
+    """Value-checked fields must have a non-empty value; checked across all rows."""
+    errors = []
+    for field_id, field in schema.items():
+        if field_id in (0, 1):
+            continue
+        if field.get("type") == "array":
+            array_name = field.get("key", "")
+            for nid, nf in (field.get("nestedSchema") or {}).items():
+                if nf.get("type") in ("boolean", "number", "object") or nf.get("regex"):
+                    continue
+                if "value" not in nf and "value_contains" not in nf:
+                    continue
+                # An empty "value" only means a check when its toggle is on;
+                # inside a collapsed array the toggle isn't rendered, so the
+                # empty value is just the unnormalized "type only" state.
+                epoch = st.session_state.get(f"arr_nested_reset_epoch_{field_id}_{nid}", 0)
+                toggle_on = st.session_state.get(f"arr_nested_check_value_{field_id}_{nid}_{epoch}")
+                if "value_contains" not in nf and not toggle_on:
+                    continue
+                val = nf.get("value_contains") if "value_contains" in nf else nf.get("value", "")
+                if not str(val or "").strip():
+                    errors.append(f"{array_name}.{nf.get('key', '')}")
+        elif field.get("type") not in ("array", "boolean", "number") and not field.get("regex"):
+            if "value" not in field and "value_contains" not in field:
+                continue
+            val = field.get("value_contains") if "value_contains" in field else field.get("value", "")
+            if not str(val or "").strip():
+                errors.append(field.get("key", ""))
+    return errors
+
 
 def build_grouped_dependency_options(repo, schema, current_cond_param, exclude_key=None):
     """Options for a 'Dependency Parameter' selectbox: params already used in
@@ -53,24 +113,17 @@ def render_schema_param(field_id, field):
     param_name = field.get("key", "")
     repo_default = repo.get(param_name, {}).get("value", "")
 
+    # Bumped on every ↺ reset so the value/match/case-sensitive widgets get
+    # a brand-new key and can't keep showing their last-committed state —
+    # popping session_state alone was not enough to make the Match radio
+    # (and the case-sensitive checkbox) forget "Contains" after a reset.
+    reset_epoch = st.session_state.get(f"schema_reset_epoch_{field_id}", 0)
+
     # Only string fields support the Exact/Contains match mode.
     is_contains_mode = field.get("type") not in ("array", "boolean", "number") and "value_contains" in field
 
     # Robust comparison (0.0 vs 0)
     current_val = field.get("value_contains", "") if is_contains_mode else field.get("value", "")
-
-    def values_match(v1, v2, p_type):
-        if p_type == "number":
-            try:
-                return float(v1) == float(v2)
-            except:
-                return str(v1) == str(v2)
-        return str(v1) == str(v2)
-
-    is_overridden = not values_match(current_val, repo_default, field.get("type")) and param_name in repo
-
-    label = f"Field {'[override]' if is_overridden else ''}"
-    cols[0].text_input(label, param_name, disabled=True, key=f"schema_key_{field_id}")
 
     cols[1].text_input(
         "Type",
@@ -84,13 +137,13 @@ def render_schema_param(field_id, field):
     elif field.get("type") == "boolean":
         opts = ["true", "false", "Any"]
         curr_idx = opts.index(str(current_val).lower()) if str(current_val).lower() in opts else 2
-        new_val = cols[2].selectbox("Value", opts, index=curr_idx, key=f"schema_value_{field_id}")
+        new_val = cols[2].selectbox("Value", opts, index=curr_idx, key=f"schema_value_{field_id}_{reset_epoch}")
         if new_val != str(current_val):
             field["value"] = new_val
             st.session_state.schema[field_id] = field
     elif field.get("type") == "number":
         # Use text_input to allow empty values for numbers
-        new_val = cols[2].text_input("Value (number)", value=str(current_val) if current_val is not None else "", key=f"schema_value_{field_id}")
+        new_val = cols[2].text_input("Value (number)", value=str(current_val) if current_val is not None else "", key=f"schema_value_{field_id}_{reset_epoch}")
         if new_val != str(current_val):
             # Validate it's a number or empty
             if new_val.strip() == "":
@@ -102,30 +155,93 @@ def render_schema_param(field_id, field):
                 except ValueError:
                     st.error("Invalid number")
             st.session_state.schema[field_id] = field
+    elif field.get("regex"):
+        if render_pattern_notice(cols[2], field):
+            st.session_state.schema[field_id] = field
     else:
         with cols[2]:
-            match_mode = st.radio(
-                "Match", ["Exact", "Contains"], index=(1 if is_contains_mode else 0),
-                key=f"schema_match_{field_id}", horizontal=True,
-                help="Exact: value must match exactly. Contains: value must contain this substring.",
+            check_value = st.toggle(
+                "Check value",
+                value=has_value_check(field),
+                key=f"schema_check_value_{field_id}_{reset_epoch}",
+                help="Off: only the type is validated. On: value must match exactly or contain a substring.",
             )
-            value_label = "Value" if match_mode == "Exact" else "Contains"
-            new_val = st.text_input(value_label, str(current_val), key=f"schema_value_{field_id}")
+            if check_value:
+                match_mode = st.radio(
+                    "Match", ["Exact", "Contains"], index=(1 if is_contains_mode else 0),
+                    key=f"schema_match_{field_id}_{reset_epoch}", horizontal=True,
+                    help="Exact: value must match exactly. Contains: value must contain this substring.",
+                )
+                value_label = "Value" if match_mode == "Exact" else "Contains"
+                new_val = st.text_input(value_label, str(current_val), key=f"schema_value_{field_id}_{reset_epoch}")
+                if not new_val.strip():
+                    st.error(f"{value_label} cannot be empty.")
+                if match_mode == "Contains":
+                    case_sensitive = st.checkbox(
+                        "Case sensitive",
+                        value=field.get("value_contains_case_sensitive", True),
+                        key=f"schema_case_sensitive_{field_id}_{reset_epoch}",
+                    )
+            else:
+                st.caption("Type only — no value check.")
 
-        desired_key = "value_contains" if match_mode == "Contains" else "value"
-        stale_key = "value" if match_mode == "Contains" else "value_contains"
-        if field.get(desired_key, "") != new_val or stale_key in field:
-            field[desired_key] = new_val
-            field.pop(stale_key, None)
+        if check_value:
+            desired_key = "value_contains" if match_mode == "Contains" else "value"
+            stale_key = "value" if match_mode == "Contains" else "value_contains"
+            if desired_key not in field or field.get(desired_key) != new_val or stale_key in field:
+                field[desired_key] = new_val
+                field.pop(stale_key, None)
+                st.session_state.schema[field_id] = field
+            if match_mode == "Contains":
+                if field.get("value_contains_case_sensitive", True) != case_sensitive:
+                    field["value_contains_case_sensitive"] = case_sensitive
+                    st.session_state.schema[field_id] = field
+            elif "value_contains_case_sensitive" in field:
+                field.pop("value_contains_case_sensitive", None)
+                st.session_state.schema[field_id] = field
+        elif any(k in field for k in ("value", "value_contains", "value_contains_case_sensitive")):
+            for k in ("value", "value_contains", "value_contains_case_sensitive"):
+                field.pop(k, None)
             st.session_state.schema[field_id] = field
+
+    # Recompute against the value as edited this run (not the pre-edit value
+    # captured above) — otherwise the override state always lags one edit behind.
+    post_edit_is_contains = field.get("type") not in ("array", "boolean", "number") and "value_contains" in field
+    post_edit_val = field.get("value_contains", "") if post_edit_is_contains else field.get("value", "")
+    has_repo_default = repo_default not in ("", None, [], "Any")
+    # Repo defaults are always Exact-match values — Contains mode has no
+    # repo-default equivalent, so using it is itself an override even when
+    # the typed substring happens to equal the repo default's text.
+    #
+    # differs_from_repo is deliberately broader than "has a meaningful
+    # default": even when the repo has nothing recommended (blank/Any), an
+    # accidental edit still needs a way back — there'd otherwise be no
+    # revert path at all for a parameter with no repo default.
+    differs_from_repo = param_name in repo and (
+        post_edit_is_contains or not values_match(post_edit_val, repo_default, field.get("type"))
+    )
+    is_overridden = has_repo_default and differs_from_repo
+
+    label = f"Field {'[override]' if is_overridden else ''}"
+    cols[0].text_input(label, param_name, disabled=True, key=f"schema_key_{field_id}")
+    if is_overridden:
+        cols[0].caption(f":orange[This parameter has a default value set in the repo ({repo_default}). Click ↺ to reset to it.]")
+    elif differs_from_repo:
+        cols[0].caption(":gray[Differs from what's currently in the repo for this parameter (no default set there). Click ↺ to revert.]")
 
     # Actions: Reset and Delete (icon-only — column is too narrow for "Reset" as text)
-    if is_overridden:
-        if cols[3].button("↺", key=f"schema_reset_{field_id}", help="Reset to Repo default"):
+    cols[3].space("small")  # push the buttons down to the input row (below the widget labels)
+    if differs_from_repo:
+        if cols[3].button("↺", key=f"schema_reset_{field_id}", help="Revert to repo's current value"):
             field["value"] = repo_default
             field.pop("value_contains", None)
+            field.pop("value_contains_case_sensitive", None)
             st.session_state.schema[field_id] = field
-            st.toast(f"Reset '{param_name}' to default.")
+            # Bump the reset epoch so the value/match/case-sensitive widgets
+            # get fresh keys next render — popping their old keys wasn't
+            # enough to make the Match radio forget "Contains".
+            st.session_state[f"schema_reset_epoch_{field_id}"] = reset_epoch + 1
+            st.toast(f"Reverted '{param_name}' to repo's current value.")
             st.rerun()
 
     if cols[3].button("X", key=f"schema_delete_{field_id}"):
@@ -269,7 +385,6 @@ def render_schema_param(field_id, field):
                        # Start Auto-Add Logic
                        if new_vip in repo:
                             new_internal = convert_repo_param_to_internal(new_vip, repo[new_vip])
-                            add_schema_name_to_param_in_repo(new_vip, st.session_state.event_name)
                             new_sch_id = next_id_for_schema()
                             st.session_state.schema[new_sch_id] = new_internal
                             st.rerun()
@@ -284,18 +399,29 @@ def render_schema_param(field_id, field):
 
 # RENDER READ-ONLY ARRAY FIELD
 def render_array_param(field_id, field):
-    top = st.columns([5, 1, 1])
+    nested = field.get("nestedSchema", {}) or {}
+    # Compare nested with Repo
+    repo = st.session_state.get("repo", {})
+    array_name = field.get("key", "")
+    repo_nested = repo.get(array_name, {}).get("nestedSchema", {})
+
+    top = st.columns([4, 1, 2, 1])
     with top[0]:
         st.markdown(f"### Array: `{field.get('key')}`")
         exp_key = f"array_expanded_{field_id}"
         st.session_state.setdefault(exp_key, True)
     # Toggle
-    if top[1].button("Toggle" if st.session_state[exp_key] else "Expand", key=f"toggle_arr_{field_id}"):
+    if top[1].button("Collapse" if st.session_state[exp_key] else "Expand", key=f"toggle_arr_{field_id}"):
         st.session_state[exp_key] = not st.session_state[exp_key]
         st.rerun()
 
+    # Reserved now, filled in after the loop below — filling it here would
+    # read pre-edit state and lag a render behind, same bug as the per-field
+    # ↺ had before it was fixed.
+    reset_all_slot = top[2].empty()
+
     # Delete
-    if top[2].button("X", key=f"delete_arr_{field_id}"):
+    if top[3].button("X", key=f"delete_arr_{field_id}"):
         delete_field_and_rerun(field_id)
         st.stop()
 
@@ -305,12 +431,7 @@ def render_array_param(field_id, field):
 
     st.markdown("#### Nested fields:")
 
-    nested = field.get("nestedSchema", {}) or {}
-    # Compare nested with Repo
-    repo = st.session_state.get("repo", {})
-    array_name = field.get("key", "")
-    repo_nested = repo.get(array_name, {}).get("nestedSchema", {})
-
+    any_nested_overridden = False
     for nid, nf in sorted(nested.items()):
         cols = st.columns([3, 2, 3, 1])
         n_key = nf.get("key", "")
@@ -322,10 +443,11 @@ def render_array_param(field_id, field):
         r_nf = repo_nested.get(n_key, {})
         r_val = r_nf.get("value", "")
         current_n_val = nf.get("value_contains", "") if is_n_contains_mode else nf.get("value", "")
-        is_n_overridden = str(current_n_val) != str(r_val) and n_key in repo_nested
 
-        label = f"Key {'[override]' if is_n_overridden else ''}"
-        cols[0].text_input(label, n_key, disabled=True, key=f"arr_nested_key_{field_id}_{nid}")
+        # See the matching comment in render_schema_param — this is bumped
+        # on ↺ so the value/match/case-sensitive widgets can't keep showing
+        # their last-committed state after a reset.
+        n_reset_epoch = st.session_state.get(f"arr_nested_reset_epoch_{field_id}_{nid}", 0)
 
         cols[1].text_input("Type", nf.get("type", ""), disabled=True, key=f"arr_nested_type_{field_id}_{nid}")
 
@@ -334,9 +456,12 @@ def render_array_param(field_id, field):
             opts = ["true", "false", "Any"]
             c_val = str(nf.get("value", "")).lower()
             c_idx = opts.index(c_val) if c_val in opts else 2
-            new_n_val = cols[2].selectbox("Value", opts, index=c_idx, key=f"arr_nested_value_{field_id}_{nid}")
+            new_n_val = cols[2].selectbox("Value", opts, index=c_idx, key=f"arr_nested_value_{field_id}_{nid}_{n_reset_epoch}")
+            if new_n_val != nf.get("value", ""):
+                nf["value"] = new_n_val
+                st.session_state.schema[field_id]["nestedSchema"][nid] = nf
         elif nf.get("type") == "number":
-            new_n_val = cols[2].text_input("Value (number)", value=str(nf.get("value", "")) if nf.get("value") is not None else "", key=f"arr_nested_value_{field_id}_{nid}")
+            new_n_val = cols[2].text_input("Value (number)", value=str(nf.get("value", "")) if nf.get("value") is not None else "", key=f"arr_nested_value_{field_id}_{nid}_{n_reset_epoch}")
             if str(new_n_val) != str(nf.get("value", "")):
                 if new_n_val.strip() == "":
                     nf["value"] = ""
@@ -349,28 +474,84 @@ def render_array_param(field_id, field):
                 st.session_state.schema[field_id]["nestedSchema"][nid] = nf
         elif nf.get("type") == "object":
             cols[2].markdown("—")
+        elif nf.get("regex"):
+            if render_pattern_notice(cols[2], nf):
+                st.session_state.schema[field_id]["nestedSchema"][nid] = nf
         else:
             with cols[2]:
-                n_match_mode = st.radio(
-                    "Match", ["Exact", "Contains"], index=(1 if is_n_contains_mode else 0),
-                    key=f"arr_nested_match_{field_id}_{nid}", horizontal=True,
-                    help="Exact: value must match exactly. Contains: value must contain this substring.",
+                n_check_value = st.toggle(
+                    "Check value",
+                    value=has_value_check(nf),
+                    key=f"arr_nested_check_value_{field_id}_{nid}_{n_reset_epoch}",
+                    help="Off: only the type is validated. On: value must match exactly or contain a substring.",
                 )
-                n_value_label = "Value" if n_match_mode == "Exact" else "Contains"
-                new_n_val = st.text_input(n_value_label, str(current_n_val), key=f"arr_nested_value_{field_id}_{nid}")
+                if n_check_value:
+                    n_match_mode = st.radio(
+                        "Match", ["Exact", "Contains"], index=(1 if is_n_contains_mode else 0),
+                        key=f"arr_nested_match_{field_id}_{nid}_{n_reset_epoch}", horizontal=True,
+                        help="Exact: value must match exactly. Contains: value must contain this substring.",
+                    )
+                    n_value_label = "Value" if n_match_mode == "Exact" else "Contains"
+                    new_n_val = st.text_input(n_value_label, str(current_n_val), key=f"arr_nested_value_{field_id}_{nid}_{n_reset_epoch}")
+                    if not new_n_val.strip():
+                        st.error(f"{n_value_label} cannot be empty.")
+                    if n_match_mode == "Contains":
+                        n_case_sensitive = st.checkbox(
+                            "Case sensitive",
+                            value=nf.get("value_contains_case_sensitive", True),
+                            key=f"arr_nested_case_sensitive_{field_id}_{nid}_{n_reset_epoch}",
+                        )
+                else:
+                    st.caption("Type only — no value check.")
 
-            n_desired_key = "value_contains" if n_match_mode == "Contains" else "value"
-            n_stale_key = "value" if n_match_mode == "Contains" else "value_contains"
-            if nf.get(n_desired_key, "") != new_n_val or n_stale_key in nf:
-                nf[n_desired_key] = new_n_val
-                nf.pop(n_stale_key, None)
+            if n_check_value:
+                n_desired_key = "value_contains" if n_match_mode == "Contains" else "value"
+                n_stale_key = "value" if n_match_mode == "Contains" else "value_contains"
+                if n_desired_key not in nf or nf.get(n_desired_key) != new_n_val or n_stale_key in nf:
+                    nf[n_desired_key] = new_n_val
+                    nf.pop(n_stale_key, None)
+                    st.session_state.schema[field_id]["nestedSchema"][nid] = nf
+                if n_match_mode == "Contains":
+                    if nf.get("value_contains_case_sensitive", True) != n_case_sensitive:
+                        nf["value_contains_case_sensitive"] = n_case_sensitive
+                        st.session_state.schema[field_id]["nestedSchema"][nid] = nf
+                elif "value_contains_case_sensitive" in nf:
+                    nf.pop("value_contains_case_sensitive", None)
+                    st.session_state.schema[field_id]["nestedSchema"][nid] = nf
+            elif any(k in nf for k in ("value", "value_contains", "value_contains_case_sensitive")):
+                for k in ("value", "value_contains", "value_contains_case_sensitive"):
+                    nf.pop(k, None)
                 st.session_state.schema[field_id]["nestedSchema"][nid] = nf
 
+        # Recompute against the value as edited this run — see the matching
+        # comment in render_schema_param for why this can't happen earlier.
+        post_edit_n_is_contains = nf.get("type") not in ("boolean", "number", "object") and "value_contains" in nf
+        post_edit_n_val = nf.get("value_contains", "") if post_edit_n_is_contains else nf.get("value", "")
+        has_repo_default_n = r_val not in ("", None, [], "Any")
+        # Same reasoning as the top-level check: broader than "has a
+        # meaningful default" so an accidental edit is still revertable even
+        # when the repo has nothing recommended for this nested key.
+        n_differs_from_repo = n_key in repo_nested and (
+            post_edit_n_is_contains or not values_match(post_edit_n_val, r_val, nf.get("type"))
+        )
+        is_n_overridden = has_repo_default_n and n_differs_from_repo
+        any_nested_overridden = any_nested_overridden or n_differs_from_repo
+
+        label = f"Key {'[override]' if is_n_overridden else ''}"
+        cols[0].text_input(label, n_key, disabled=True, key=f"arr_nested_key_{field_id}_{nid}")
         if is_n_overridden:
-            if cols[3].button("↺", key=f"arr_nested_reset_{field_id}_{nid}", help="Reset to Repo default"):
+            cols[0].caption(f":orange[This parameter has a default value set in the repo ({r_val}). Click ↺ to reset to it.]")
+        elif n_differs_from_repo:
+            cols[0].caption(":gray[Differs from what's currently in the repo for this key (no default set there). Click ↺ to revert.]")
+
+        if n_differs_from_repo:
+            cols[3].space("small")
+            if cols[3].button("↺", key=f"arr_nested_reset_{field_id}_{nid}", help="Revert to repo's current value"):
                 nf["value"] = r_val
                 nf.pop("value_contains", None)
+                nf.pop("value_contains_case_sensitive", None)
                 st.session_state.schema[field_id]["nestedSchema"][nid] = nf
+                st.session_state[f"arr_nested_reset_epoch_{field_id}_{nid}"] = n_reset_epoch + 1
                 st.rerun()
         # Nested Advanced Label Logic
         n_adv_label = f"Advanced ({n_key})"
@@ -502,13 +683,31 @@ def render_array_param(field_id, field):
                        if st.button(f"➕ Add '{n_new_vip}'", key=f"add_dep_n_{field_id}_{nid}"):
                             if n_new_vip in repo:
                                  new_int = convert_repo_param_to_internal(n_new_vip, repo[n_new_vip])
-                                 add_schema_name_to_param_in_repo(n_new_vip, st.session_state.event_name)
                                  n_sch_id = next_id_for_schema()
                                  st.session_state.schema[n_sch_id] = new_int
                                  st.rerun()
                   
                   elif dep_field_n.get("optional") is True:
                       st.info(f"ℹ️ Dependency '{n_new_vip}' is optional. Validation will be skipped if '{n_new_vip}' is missing.")
+
+    if any_nested_overridden:
+        if reset_all_slot.button(
+            "↺ Revert overridden fields to repo", key=f"arr_reset_all_{field_id}",
+            help="Reverts every nested field that differs from what's currently in the repo — "
+                 "including fields with no repo default, which revert back to empty.",
+        ):
+            for nid, nf in nested.items():
+                n_key_ = nf.get("key", "")
+                if n_key_ in repo_nested:
+                    r_val = repo_nested.get(n_key_, {}).get("value", "")
+                    nf["value"] = r_val
+                    nf.pop("value_contains", None)
+                    nf.pop("value_contains_case_sensitive", None)
+                    st.session_state.schema[field_id]["nestedSchema"][nid] = nf
+                    epoch_key = f"arr_nested_reset_epoch_{field_id}_{nid}"
+                    st.session_state[epoch_key] = st.session_state.get(epoch_key, 0) + 1
+            st.toast(f"Reverted all differing nested fields of '{array_name}' to repo.")
+            st.rerun()
 
     st.markdown("---")
 
@@ -558,6 +757,31 @@ def render_builder():
             disabled=True,
             key="event_name_show",
         )
+        if st.button("✏️ Change name", key="change_event_name_btn"):
+            st.session_state.event_name = ""
+            st.session_state.pop("loaded_schema_name", None)
+            st.rerun()
+
+    existing_schema_files = set(list_schemas())
+    current_name = st.session_state.event_name.strip()
+    if current_name and current_name != st.session_state.get("loaded_schema_name"):
+        st.session_state.pop("loaded_schema_name", None)
+    is_editing_loaded_schema = (
+        st.session_state.event_name.strip()
+        and st.session_state.event_name.strip() == st.session_state.get("loaded_schema_name")
+    )
+    event_name_conflict = bool(
+        st.session_state.event_name
+        and f"{st.session_state.event_name.strip()}.json" in existing_schema_files
+        and not is_editing_loaded_schema
+    )
+    st.session_state.event_name_conflict = event_name_conflict
+    if event_name_conflict:
+        st.error(
+            f"A schema named '{st.session_state.event_name}' already exists. "
+            "The builder only creates new events — pick a different name to avoid "
+            "overwriting the existing schema."
+        )
 
     st.session_state.schema_version = st.number_input(
         "Schema Version",
@@ -576,8 +800,13 @@ def render_builder():
     st.subheader("Add Field From Parameters Repo")
 
     # Category filter
-    categories = sorted({param.get("category", "Uncategorized") for param in repo.values()})
-    selected_category = st.selectbox("Category", ["All"] + categories, key="category_filter")
+    real_categories = sorted({param.get("category") for param in repo.values() if param.get("category")})
+    has_uncategorized = any(not param.get("category") for param in repo.values())
+    category_options = ["All"] + ([""] if has_uncategorized else []) + real_categories
+    selected_category = st.selectbox(
+        "Category", category_options, key="category_filter",
+        format_func=lambda c: "— No category —" if c == "" else c,
+    )
 
     # Search filter
     query = st.text_input("Search parameter", key="search_param")
@@ -588,7 +817,7 @@ def render_builder():
 
     # Apply category filter
     if selected_category != "All":
-        available = [k for k in available if repo[k].get("category") == selected_category]
+        available = [k for k in available if (repo[k].get("category") or "") == selected_category]
 
     # Apply search filter
     if query:
@@ -599,11 +828,9 @@ def render_builder():
 
     selected = st.selectbox("Choose parameter", available, key="choose_param")
 
-    if st.button("Add selected parameter", key="add_param_btn"):
+    if st.button("Add selected parameter", key="add_param_btn", disabled=not available):
         new_id = next_id_for_schema()
         internal = convert_repo_param_to_internal(selected, repo[selected])
-
-        add_schema_name_to_param_in_repo(selected, st.session_state.event_name)
 
         schema[new_id] = internal
 
@@ -657,6 +884,7 @@ def render_builder():
 
             if success:
                 st.session_state.upload_status = True
+                st.session_state.loaded_schema_name = event_name.strip()
                 # Update repo with schema usage
                 update_repo_with_schema_usage(event_name, data)
                 # Clear cache to refresh explorer
@@ -665,7 +893,11 @@ def render_builder():
                 st.session_state.upload_status = False
                 st.session_state.upload_error = message
 
-        if st.session_state.event_name.strip():
+        empty_match_value_errors = find_empty_match_value_errors(schema)
+
+        if event_name_conflict:
+            st.button("Save to GCS" if not is_github_mode() else "Save to GitHub", disabled=True, key="send_gcp_btn")
+        elif st.session_state.event_name.strip():
             # Determine button label based on storage mode
             if is_github_mode():
                 current_branch = get_current_branch()
@@ -673,11 +905,18 @@ def render_builder():
             else:
                 btn_label = "Save to GCS"
 
+            if empty_match_value_errors:
+                st.error(
+                    "Fix the empty Exact/Contains value(s) before saving: "
+                    + ", ".join(empty_match_value_errors)
+                )
+
             st.button(
                 btn_label,
                 on_click=handle_save,
                 args=(export, f"{st.session_state.event_name}.json", st.session_state.event_name),
                 type="primary",
+                disabled=bool(empty_match_value_errors),
                 key="send_gcp_btn",
             )
 

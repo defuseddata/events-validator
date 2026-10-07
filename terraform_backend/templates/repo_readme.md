@@ -103,16 +103,30 @@ Each schema file defines the expected structure for an event:
 | Property | Required | Description |
 |----------|----------|-------------|
 | `type` | Yes | The data type |
-| `value` | No | Fixed expected value |
-| `regex` | No | Pattern for validation (alternative to value) |
+| `value` | No | Fixed expected value (omit for type-only validation) |
+| `value_contains` | No | Substring the value must contain (alternative to `value`) |
+| `value_contains_case_sensitive` | No | Set to `false` to ignore case for `value_contains` (default: `true`) |
+| `regex` | No | Pattern for validation (alternative to `value`/`value_contains`; the UI doesn't combine them) |
 | `description` | No | Documentation |
 | `nestedSchema` | For arrays | Schema for array items |
+
+Example:
+
+```json
+{
+  "event_name":    { "type": "string", "value": "page_view" },
+  "page_title":    { "type": "string" },
+  "page_location": { "type": "string", "value_contains": "/checkout", "value_contains_case_sensitive": false },
+  "user_id":       { "type": "string", "regex": "^user_\\d+$" }
+}
+```
+Above: `event_name` must equal `page_view` (Exact); `page_title` is type-only; `page_location` must contain `/checkout`, ignoring case (Contains); `user_id` must match the regex (in the JSON file the backslash is escaped, `\\d`; in the UI regexes are set in Params Repo).
 
 ## Parameter Repository (repo.json)
 
 The `repo.json` file is a centralized parameter repository that:
 - Defines reusable parameters with their types, descriptions, and categories
-- Tracks which schemas use each parameter
+- Tracks which schemas use each parameter (`usedInSchemas` lists schemas where the parameter is a top-level field)
 - Enables bulk updates across all schemas using a parameter
 
 Example:

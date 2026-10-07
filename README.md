@@ -88,10 +88,24 @@ The UI allows you to define these validations visually:
 *   **Conditional Validation**: Validate a field ONLY if another specific parameter is present (e.g., `item_id` required only if `item_list_name` exists).
 *   **Type Checking**: `string`, `number`, `boolean`, `array`.
 *   **Exact Match**: Enforce a specific value (e.g., `event_name` must be `purchase`).
-*   **Regex Pattern**: Validate strings against a Regular Expression (e.g., `^user_\d+$`).
+*   **Contains Match**: Require a string to contain a substring (e.g., `page_location` contains `/checkout`). Case-sensitive by default; untick **Case sensitive** to ignore case (`value_contains_case_sensitive` in JSON).
+*   **Type Only**: Turn off **Check value** on a string field to validate only its type (any non-empty string passes).
+*   **Regex Pattern**: Validate strings against a Regular Expression (e.g., `^user_\d+$`). Set it in **Params Repo** (Validation Type → Regex Pattern); schemas built from that parameter inherit it. The Builder has no regex input of its own: it shows the inherited pattern and turns off Exact/Contains for that field, so a field is validated by a pattern or by a value, not both.
 *   **Array Items**: Define a schema for items within an array.
 *   **"Any" Value**: Enforces the **Type** but ignores the specific value.
 *   **Nullable Numbers**: In the UI, clearing a number field sets it to "empty" (null/undefined) rather than `0`.
+
+Example of the resulting schema:
+
+```json
+{
+  "event_name":    { "type": "string", "value": "page_view" },
+  "page_title":    { "type": "string" },
+  "page_location": { "type": "string", "value_contains": "/checkout", "value_contains_case_sensitive": false },
+  "user_id":       { "type": "string", "regex": "^user_\\d+$" }
+}
+```
+Above: `event_name` must equal `page_view` (Exact); `page_title` is type-only; `page_location` must contain `/checkout`, ignoring case (Contains); `user_id` must match the regex (in the UI, regexes are set in Params Repo; in the JSON file the backslash is escaped, `\\d`).
 
 #### 2. Cloud Function (Full Engine)
 The core validation engine (`validator_src`) supports additional advanced features if you edit JSON schemas manually:
@@ -108,14 +122,14 @@ The core validation engine (`validator_src`) supports additional advanced featur
 | `boolean` | `true` or `false`. | ✅ | ✅ |
 | `array` | List of items (can have nested schemas). | ✅ | ✅ |
 | `object` | Nested JSON object. | ❌ | ✅ |
-| **regex** | Regular Expression Pattern. | ❌ | ✅ |
+| **regex** | Regular Expression Pattern. | ✅ (Params Repo) | ✅ |
 
 > [!TIP]
 > **Regex Best Practice**: For strict validation, always use start (`^`) and end (`$`) anchors. Without them, the validator accepts partial matches (e.g., pattern `\d+` will validly match `"abc123xyz"`).
 
 ### 🔧 Advanced Schema Configuration (Manual Edit)
 
-To utilize features not yet available in the UI (like nested Objects, Regex patterns, or exact length checks), you can manually edit the JSON schema file in your Google Cloud Storage bucket.
+To utilize features not yet available in the UI (like nested Objects or exact length checks), you can manually edit the JSON schema file in your Google Cloud Storage bucket.
 
 #### 1. Nested Object Validation
 Use this structure to validate a generic object (e.g. `user_info`) containing specific fields.

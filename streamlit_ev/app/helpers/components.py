@@ -161,7 +161,8 @@ def render_storage_status(detailed: bool = False):
             Changes are saved directly to GCS. Consider configuring GitHub integration for version control.
             """)
         else:
-            st.caption(f"Storage: GCS ({info['bucket']})")
+            bucket_url = f"https://console.cloud.google.com/storage/browser/{info['bucket']}"
+            st.caption(f"Storage: GCS ([{info['bucket']}]({bucket_url}))")
 
 
 def render_commit_history(file_path: Optional[str] = None, limit: int = 5):

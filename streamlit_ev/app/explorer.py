@@ -13,7 +13,7 @@ from helpers.storage import (
 )
 from helpers.components import render_branch_selector, render_storage_status, render_commit_history
 from helpers.helpers import readSchemaAndSetState
-from helpers.updater import check_schema_health, update_schema_full, render_diff_ui, construct_schema_definition
+from helpers.updater import check_schema_health, update_schema_full, render_diff_ui, construct_schema_definition, preserve_schema_customization
 import traceback
 
 repo_file_name = os.getenv("REPO_JSON_FILE") or "repo.json"
@@ -98,6 +98,9 @@ def render_explorer():
     schemas_content = cache["schemas"]
     health_results = cache["health"]
 
+    critical_schemas = [f for f, h in health_results.items() if h.get("critical")]
+    minor_only_schemas = [f for f, h in health_results.items() if h.get("minor") and not h.get("critical")]
+
     # ---------------------------------------------------------
     # BULK SYNC UTILITY
     # ---------------------------------------------------------
@@ -142,30 +145,106 @@ def render_explorer():
     # SCHEMA LIST
     # ---------------------------------------------------------
     source_label = f"GitHub ({current_branch})" if is_github_mode() else "GCP Bucket"
-    st.header(f"Available Schemas in {source_label}")
+    st.markdown(f"## Available Schemas in {source_label}")
+    status_parts = []
+    if critical_schemas:
+        status_parts.append(f":red[{len(critical_schemas)} schema(s) with critical errors]")
+    if minor_only_schemas:
+        status_parts.append(f":orange[{len(minor_only_schemas)} schema(s) with minor errors]")
+    if status_parts:
+        st.markdown("&nbsp;&nbsp;&nbsp;".join(status_parts))
 
-    if cache["last_sync"]:
-        st.caption(f"Last sync: {cache['last_sync']}")
+    if not schemas_content:
+        st.info("No schemas found. Create a schema in the Builder or add files to the repository.")
+        return
+
+    available_categories = sorted({
+        param.get("category", "Uncategorized")
+        for param in st.session_state.repo.values()
+        if param.get("category")
+    })
+
+    col_sync, col_filter, col_category, col_search = st.columns([2, 2, 2, 3], vertical_alignment="center")
+    with col_sync:
+        if cache["last_sync"]:
+            st.caption(f"Last sync: {cache['last_sync']}")
+    with col_filter:
+        status_filter = st.selectbox(
+            "Filter by status",
+            ["All Statuses", "Critical", "Minor", "Healthy"],
+            key="explorer_status_filter",
+            label_visibility="collapsed",
+        )
+    with col_category:
+        has_uncategorized = any(not param.get("category") for param in st.session_state.repo.values())
+        category_filter = st.selectbox(
+            "Filter by category",
+            ["All Categories"] + ([""] if has_uncategorized else []) + available_categories,
+            key="explorer_category_filter",
+            label_visibility="collapsed",
+            format_func=lambda c: "— No category —" if c == "" else c,
+        )
+    with col_search:
+        query = st.text_input(
+            "Search schema",
+            key="explorer_search",
+            label_visibility="collapsed",
+            placeholder="Search schema",
+        )
 
     # Show commit history if in GitHub mode
     if is_github_mode():
         with st.expander("Recent Changes", expanded=False):
             render_commit_history(limit=5)
 
-    if not schemas_content:
-        st.info("No schemas found. Create a schema in the Builder or add files to the repository.")
-        return
+    def schema_status(health):
+        if health.get("critical"):
+            return "Critical"
+        if health.get("minor"):
+            return "Minor"
+        return "Healthy"
 
-    for schema_file, content in sorted(schemas_content.items()):
+    def schema_categories(content):
+        return {
+            st.session_state.repo[param_name].get("category") or ""
+            for param_name in content
+            if param_name not in ("event_name", "version") and param_name in st.session_state.repo
+        }
+
+    filtered_schemas = sorted(schemas_content.items())
+    if query:
+        filtered_schemas = [
+            (schema_file, content)
+            for schema_file, content in filtered_schemas
+            if query.lower() in schema_file.lower()
+        ]
+    if status_filter != "All Statuses":
+        filtered_schemas = [
+            (schema_file, content)
+            for schema_file, content in filtered_schemas
+            if schema_status(health_results.get(schema_file, {})) == status_filter
+        ]
+    if category_filter != "All Categories":
+        filtered_schemas = [
+            (schema_file, content)
+            for schema_file, content in filtered_schemas
+            if category_filter in schema_categories(content)
+        ]
+    if not filtered_schemas:
+        st.info("No schemas match the current filters.")
+
+    for schema_file, content in filtered_schemas:
         health = health_results.get(schema_file, {})
         crit = health.get("critical", [])
         minor = health.get("minor", [])
 
-        label = schema_file
+        spacer = "&nbsp;&nbsp;&nbsp;&nbsp;"
         if crit:
-            label += f" CRITICAL ({len(crit)})"
+            label = f"{schema_file}{spacer}:red-background[CRITICAL ({len(crit)})]"
         elif minor:
-            label += f" Minor ({len(minor)})"
+            label = f"{schema_file}{spacer}:orange-background[Minor ({len(minor)})]"
+        else:
+            label = schema_file
 
         with st.expander(label):
             st.write(f"Schema File: {schema_file}")
@@ -178,6 +257,7 @@ def render_explorer():
                             st.markdown(f"**Parameter: `{p}` (TYPE MISMATCH)**")
                             repo_param = st.session_state.repo[p]
                             new_props = construct_schema_definition(repo_param)
+                            new_props = preserve_schema_customization(content.get(p, {}), new_props)
                             render_diff_ui(content, {p: new_props}, p)
                             st.markdown("---")
             if minor:
@@ -187,8 +267,12 @@ def render_explorer():
                         if p in st.session_state.repo:
                             st.markdown(f"**Parameter: `{p}`**")
                             repo_param = st.session_state.repo[p]
-                            # Construct what the new props would look like
+                            # Construct what the new props would look like —
+                            # mirror update_schema_full's own preserve logic
+                            # so the preview matches what Sync with Repo
+                            # will actually do.
                             new_props = construct_schema_definition(repo_param)
+                            new_props = preserve_schema_customization(content.get(p, {}), new_props)
                             # Show side-by-side diff
                             render_diff_ui(content, {p: new_props}, p)
                             st.markdown("---")

@@ -88,6 +88,54 @@ def construct_schema_definition(param_data: dict) -> dict:
     return props
 
 
+_RULE_KEYS = ("optional", "validate_if_present", "validate_if")
+
+
+def _carry_over_rules(current: dict, new_props: dict) -> None:
+    """Validation-requirement rules (Optional / Conditional, set in Builder's
+    Advanced section) are schema-only settings — the repo has no concept of
+    them at all. Always carry them over, independent of whether the value or
+    type also changed, otherwise a repo-level edit silently drops them (see
+    construct_schema_definition, which never emits these keys)."""
+    for key in _RULE_KEYS:
+        if key in current:
+            new_props[key] = current[key]
+
+
+def preserve_schema_customization(current_field: dict, new_props: dict) -> dict:
+    """
+    Given a schema field's CURRENT definition and freshly-rebuilt props from
+    the repo (construct_schema_definition), carries over the schema's own
+    Optional/Conditional rules — settings the repo has no concept of at all,
+    so there's nothing there for it to be "the source of truth" about.
+
+    The value/regex/Contains itself is deliberately NOT preserved: the repo
+    is the source of truth for the parameter's default, so Sync / Confirm
+    Schema Updates are meant to push it onto every schema, including
+    replacing a schema's own Contains refinement back to the repo's plain
+    value. (Decided explicitly with the user 2026-09-24 after the opposite
+    behavior was tried first — see the memory note on this.)
+    """
+    if not current_field:
+        return new_props
+
+    result = dict(new_props)
+    _carry_over_rules(current_field, result)
+
+    if new_props.get("type") == "array" and "nestedSchema" in new_props:
+        curr_nested = current_field.get("nestedSchema", {}) or {}
+        merged_nested = {}
+        for nk, nv in (result.get("nestedSchema") or {}).items():
+            nv = dict(nv)
+            cv = curr_nested.get(nk)
+            if cv:
+                _carry_over_rules(cv, nv)
+            merged_nested[nk] = nv
+        result["nestedSchema"] = merged_nested
+
+    return result
+
+
 def find_impacted_schemas(param_name: str, repo_data: dict) -> list:
     """
     Returns a list of schema names (e.g., "event_v1.json") that use the given param.
@@ -261,20 +309,7 @@ def update_schema_full(schema_name: str, repo_data: dict):
             if param_name in repo_data:
                 repo_param = repo_data[param_name]
                 new_props = construct_schema_definition(repo_param)
-
-                # SMART UPDATE:
-                if new_schema[param_name].get("type") == new_props.get("type"):
-                    if "value" in new_schema[param_name]:
-                        new_props["value"] = new_schema[param_name]["value"]
-
-                    if new_props.get("type") == "array" and "nestedSchema" in new_props:
-                        curr_nested = new_schema[param_name].get("nestedSchema", {})
-                        for nk, nv in new_props["nestedSchema"].items():
-                            if nk in curr_nested and curr_nested[nk].get("type") == nv.get("type"):
-                                if "value" in curr_nested[nk]:
-                                    nv["value"] = curr_nested[nk]["value"]
-
-                new_schema[param_name] = new_props
+                new_schema[param_name] = preserve_schema_customization(new_schema[param_name], new_props)
                 updates_made = True
 
         if updates_made:
