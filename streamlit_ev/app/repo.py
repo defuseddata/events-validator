@@ -609,6 +609,10 @@ def confirm_update_dialog(full_schema_map, param_name):
 
     # MASTER TOGGLE
     def toggle_all():
+        # Widget state can already be gone if the dialog was dismissed/rerun
+        # before the callback fired — nothing to propagate then.
+        if "master_toggle_schemas" not in st.session_state:
+            return
         b_val = st.session_state.master_toggle_schemas
         for s_name in full_schema_map.keys():
             st.session_state[f"chk_{s_name}"] = b_val
