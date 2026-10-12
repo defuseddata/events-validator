@@ -28,7 +28,7 @@ schemas/
 |--------|---------|------------|
 | `main` | Production schemas | Root (no prefix) |
 | `staging` | Pre-production testing | `staging/` |
-| `feature/*` | Development branches | `branches/{branch-name}/` |
+| any other branch | Development branches | `branches/{branch-name}/` |
 
 ## Authentication (Workload Identity Federation)
 This repository is configured to use **Keyless Authentication** (Workload Identity Federation) for security.

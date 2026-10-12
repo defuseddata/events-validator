@@ -3,9 +3,7 @@ name: Sync Schemas to GCS
 on:
   push:
     branches:
-      - main
-      - staging
-      - 'feature/**'
+      - '**'
     paths:
       - 'schemas/**'
   pull_request:
@@ -13,6 +11,7 @@ on:
       - main
     paths:
       - 'schemas/**'
+  delete:
   workflow_dispatch:
     inputs:
       branch:
@@ -32,6 +31,7 @@ env:
 jobs:
   validate:
     name: Validate Schemas
+    if: github.event_name != 'delete'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -71,6 +71,7 @@ jobs:
 
   detect-changes:
     name: Detect Changed Files
+    if: github.event_name != 'delete'
     runs-on: ubuntu-latest
     outputs:
       changed_files: ${{ steps.changes.outputs.changed_files }}
@@ -162,11 +163,15 @@ jobs:
           echo "Files to sync: $CHANGED_FILES"
 
           for file in $CHANGED_FILES; do
+            FILENAME=$(basename "$file")
+            DEST="gs://${{ env.GCS_BUCKET }}/${PREFIX}${FILENAME}"
             if [ -f "$file" ]; then
-              FILENAME=$(basename "$file")
-              DEST="gs://${{ env.GCS_BUCKET }}/${PREFIX}${FILENAME}"
               echo "Uploading $file -> $DEST"
               gsutil cp "$file" "$DEST"
+            elif [ "$FILENAME" != "repo.json" ]; then
+              # File was removed from the repo - remove it from GCS as well
+              echo "Deleting $DEST (removed from repo)"
+              gsutil rm "$DEST" || echo "Already absent: $DEST"
             fi
           done
 
