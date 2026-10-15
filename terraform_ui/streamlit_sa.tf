@@ -35,6 +35,7 @@ SCHEMA_REPO_OWNER=${var.schema_repo_owner}
 SCHEMA_REPO_NAME=${var.schema_repo_name}
 SCHEMA_REPO_PATH=${var.schema_repo_path}
 SCHEMA_REPO_DEFAULT_BRANCH=${var.schema_repo_branch}
+ALLOW_SAVE_TO_DEFAULT_BRANCH=${var.allow_save_to_default_branch}
 EOT
   filename = "${path.module}/../streamlit_ev/.env"
 }

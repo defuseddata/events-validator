@@ -16,6 +16,7 @@ from helpers.storage import (
     write_repo,
     is_github_mode,
     get_current_branch,
+    direct_default_branch_save_blocked,
     clear_cache,
     list_schemas,
 )
@@ -902,7 +903,15 @@ def render_builder():
 
         empty_match_value_errors = find_empty_match_value_errors(schema)
 
-        if event_name_conflict or schema_list_error:
+        default_branch_blocked = direct_default_branch_save_blocked()
+
+        if event_name_conflict or schema_list_error or default_branch_blocked:
+            if default_branch_blocked:
+                st.warning(
+                    f"Saving straight to '{get_current_branch()}' is disabled: it is the production branch "
+                    "and a save there reaches the validator right after the sync. "
+                    "Create a branch (Create Branch above), save there and open a pull request."
+                )
             st.button("Save to GCS" if not is_github_mode() else "Save to GitHub", disabled=True, key="send_gcp_btn")
         elif st.session_state.event_name.strip():
             # Determine button label based on storage mode

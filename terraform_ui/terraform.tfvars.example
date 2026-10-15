@@ -27,6 +27,7 @@ streamlit_image_tag = "latest"
 # schema_repo_name       = "event-schemas"
 # schema_repo_path       = "schemas"
 # schema_repo_branch     = "main"
+# allow_save_to_default_branch = false  # true lets the UI save straight to main (production); false = branch + pull request
 
 # Security & Infrastructure Mode
 # true  = Creates a Classic Global Load Balancer (Costly ~$18/mo, but standard IAP)

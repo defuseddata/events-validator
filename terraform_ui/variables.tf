@@ -90,6 +90,12 @@ variable "schema_repo_branch" {
   default     = "main"
 }
 
+variable "allow_save_to_default_branch" {
+  description = "Allow the UI to save schemas straight to the default branch (production). When false, saving there is blocked and changes go through a branch and a pull request."
+  type        = bool
+  default     = false
+}
+
 variable "use_classic_load_balancer" {
   description = "If true, creates a classic Global Load Balancer (costly). If false, uses Direct IAP Integration (Preview) or pure Proxy/IAM."
   type        = bool

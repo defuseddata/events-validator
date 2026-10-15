@@ -66,6 +66,10 @@ resource "google_cloud_run_v2_service" "streamlit_ui" {
         name  = "SCHEMA_REPO_DEFAULT_BRANCH"
         value = var.schema_repo_branch
       }
+      env {
+        name  = "ALLOW_SAVE_TO_DEFAULT_BRANCH"
+        value = var.allow_save_to_default_branch ? "true" : "false"
+      }
     }
   }
 }

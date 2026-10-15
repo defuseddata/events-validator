@@ -431,12 +431,20 @@ echo "This requires GitHub Pro/Team plan for private repositories or a Public re
 read -p "Enable Branch Protection? (y/N) " INPUT_PROTECTION
 if [[ "$INPUT_PROTECTION" =~ ^[Yy] ]]; then PROTECT_TF="true"; else PROTECT_TF="false"; fi
 
+echo ""
+echo "Should the UI be allowed to save schemas straight to the default branch (main)?"
+echo "A save there reaches the validator right after the sync, i.e. it is a production change."
+echo "Answer N if changes should go through a branch and a pull request (recommended for teams)."
+read -p "Allow direct saves to main from the UI? (y/N) " INPUT_DIRECT_SAVE
+if [[ "$INPUT_DIRECT_SAVE" =~ ^[Yy] ]]; then ALLOW_DIRECT_SAVE="true"; else ALLOW_DIRECT_SAVE="false"; fi
+
 else
     echo -e "${YELLOW}Skipping GitHub GitOps setup. The backend will run natively without a repository pipeline.${NC}"
     GITHUB_TOKEN=""
     SCHEMA_REPO_OWNER=""
     SCHEMA_REPO_NAME=""
     PROTECT_TF="false"
+    ALLOW_DIRECT_SAVE="false"
 fi
 
 # Secondary Backend Settings & Advanced Customization
@@ -767,6 +775,7 @@ schema_repo_owner      = "$SCHEMA_REPO_OWNER"
 schema_repo_name       = "$SCHEMA_REPO_NAME"
 schema_repo_path       = "schemas"
 schema_repo_branch     = "main"
+allow_save_to_default_branch = $ALLOW_DIRECT_SAVE
 EOF
 
 echo -e "${GREEN}✓ UI variables configured.${NC}"
