@@ -30,6 +30,11 @@ GCP_PROJECT=${var.project_id}
 REPO_JSON_FILE=repo.json
 BQ_DATASET=${var.bq_dataset}
 BQ_TABLE=${var.bq_table}
+GITHUB_TOKEN=${var.github_token}
+SCHEMA_REPO_OWNER=${var.schema_repo_owner}
+SCHEMA_REPO_NAME=${var.schema_repo_name}
+SCHEMA_REPO_PATH=${var.schema_repo_path}
+SCHEMA_REPO_DEFAULT_BRANCH=${var.schema_repo_branch}
 EOT
   filename = "${path.module}/../streamlit_ev/.env"
 }
