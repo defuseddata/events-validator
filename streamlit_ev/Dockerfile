@@ -1,7 +1,11 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Copy uv from the official image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Use the image's Python (matches requires-python in pyproject.toml). Without this
+# uv downloads the newest CPython, which may lack wheels for pinned dependencies.
+ENV UV_PYTHON_DOWNLOADS=never
 
 WORKDIR /app
 
