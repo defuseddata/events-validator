@@ -104,7 +104,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force_sync }}" = "true" ]; then
             # Force sync - include all files
-            CHANGED_FILES=$(find ${{ env.SCHEMA_PATH }} -name "*.json" -type f | tr '\n' ' ')
+            CHANGED_FILES=$(find ${{ env.SCHEMA_PATH }} -name "*.json" -type f | sort)
           else
             # Get changed files since last commit or between branches
             if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -115,9 +115,11 @@ jobs:
 
             if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
               # Initial commit or new branch - sync all
-              CHANGED_FILES=$(find ${{ env.SCHEMA_PATH }} -name "*.json" -type f | tr '\n' ' ')
+              CHANGED_FILES=$(find ${{ env.SCHEMA_PATH }} -name "*.json" -type f | sort)
             else
-              CHANGED_FILES=$(git diff --name-only $BASE_SHA ${{ github.sha }} -- '${{ env.SCHEMA_PATH }}/*.json' | tr '\n' ' ')
+              # One path per line (file names may contain spaces); core.quotepath=false
+              # keeps git from quoting names with non-ASCII characters.
+              CHANGED_FILES=$(git -c core.quotepath=false diff --name-only $BASE_SHA ${{ github.sha }} -- '${{ env.SCHEMA_PATH }}/*.json')
             fi
           fi
 
@@ -127,8 +129,13 @@ jobs:
             echo "No schema changes detected"
           else
             echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
-            echo "Changed files: $CHANGED_FILES"
+            {
+              echo "changed_files<<CHANGED_FILES_EOF"
+              echo "$CHANGED_FILES"
+              echo "CHANGED_FILES_EOF"
+            } >> $GITHUB_OUTPUT
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
           fi
 
   sync-to-gcs:
@@ -154,15 +161,19 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Sync changed files to GCS
+        env:
+          CHANGED_FILES: ${{ needs.detect-changes.outputs.changed_files }}
         run: |
           PREFIX="${{ needs.detect-changes.outputs.branch_prefix }}"
-          CHANGED_FILES="${{ needs.detect-changes.outputs.changed_files }}"
 
           echo "Syncing to GCS bucket: ${{ env.GCS_BUCKET }}"
           echo "Prefix: ${PREFIX:-'(root)'}"
-          echo "Files to sync: $CHANGED_FILES"
+          echo "Files to sync:"
+          echo "$CHANGED_FILES"
 
-          for file in $CHANGED_FILES; do
+          # One path per line: file names can contain spaces
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
             FILENAME=$(basename "$file")
             DEST="gs://${{ env.GCS_BUCKET }}/${PREFIX}${FILENAME}"
             if [ -f "$file" ]; then
@@ -173,7 +184,7 @@ jobs:
               echo "Deleting $DEST (removed from repo)"
               gsutil rm "$DEST" || echo "Already absent: $DEST"
             fi
-          done
+          done <<< "$CHANGED_FILES"
 
       - name: Verify sync
         run: |
@@ -187,6 +198,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: write
     steps:
       - name: Checkout
@@ -194,10 +206,12 @@ jobs:
 
       - name: Comment on PR
         uses: actions/github-script@v7
+        env:
+          CHANGED_FILES: ${{ needs.detect-changes.outputs.changed_files }}
         with:
           script: |
             const hasChanges = '${{ needs.detect-changes.outputs.has_changes }}' === 'true';
-            const changedFiles = '${{ needs.detect-changes.outputs.changed_files }}'.trim().split(' ').filter(f => f);
+            const changedFiles = (process.env.CHANGED_FILES || '').split('\n').map(f => f.trim()).filter(f => f);
 
             let body = '## Schema Validation Results\n\n';
             body += '### Status: All validations passed!\n\n';
