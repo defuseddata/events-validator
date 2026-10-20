@@ -619,8 +619,23 @@ def confirm_update_dialog(full_schema_map, param_name):
         if "master_toggle_schemas" not in st.session_state:
             return
         b_val = st.session_state.master_toggle_schemas
+        st.session_state.confirm_unchecked = set() if b_val else set(full_schema_map.keys())
         for s_name in full_schema_map.keys():
             st.session_state[f"chk_{s_name}"] = b_val
+
+    # The selection lives in our own set, not in widget keys: Streamlit drops
+    # the state of a widget that was not rendered in a run (e.g. filtered out
+    # by the search box), which used to flip an unchecked schema back to checked.
+    st.session_state.setdefault("confirm_unchecked", set())
+
+    def sync_checkbox(s_name):
+        key = f"chk_{s_name}"
+        if key not in st.session_state:
+            return
+        if st.session_state[key]:
+            st.session_state.confirm_unchecked.discard(s_name)
+        else:
+            st.session_state.confirm_unchecked.add(s_name)
 
     st.checkbox("Select / Deselect all schemas", value=True, key="master_toggle_schemas", on_change=toggle_all)
 
@@ -638,22 +653,20 @@ def confirm_update_dialog(full_schema_map, param_name):
         # Use a container to group checkbox and expander
         c1, c2 = st.columns([0.1, 0.9])
         with c1:
-            # Seed initial state via setdefault only — toggle_all() sets
-            # these directly via the Session State API, so the widget must
+            # Seed the widget from our own set via setdefault only — toggle_all()
+            # sets these directly via the Session State API, so the widget must
             # not also receive a `value=` default (Streamlit warns/conflicts
             # when both happen for the same key).
-            st.session_state.setdefault(f"chk_{schema_name}", st.session_state.get("master_toggle_schemas", True))
-            st.checkbox("Select Schema", key=f"chk_{schema_name}", label_visibility="collapsed")
+            st.session_state.setdefault(f"chk_{schema_name}", schema_name not in st.session_state.confirm_unchecked)
+            st.checkbox("Select Schema", key=f"chk_{schema_name}", label_visibility="collapsed",
+                        on_change=sync_checkbox, args=(schema_name,))
         with c2:
             with st.expander(f"Review: {schema_name}", expanded=False):
                 render_diff_ui(data["original"], data["new"], param_name)
     
-    # Read selection from the full map, not just what the search filter
-    # rendered this pass — otherwise selecting a schema then filtering it
-    # out of view would silently drop it before Confirm & Update.
     selected_schemas = [
         name for name in full_schema_map.keys()
-        if st.session_state.get(f"chk_{name}", st.session_state.get("master_toggle_schemas", True))
+        if name not in st.session_state.confirm_unchecked
     ]
 
     # ---------------------------------------------------------
@@ -665,6 +678,7 @@ def confirm_update_dialog(full_schema_map, param_name):
             del st.session_state.master_toggle_schemas
         if "confirm_update_search" in st.session_state:
             del st.session_state.confirm_update_search
+        st.session_state.pop("confirm_unchecked", None)
         for k in list(st.session_state.keys()):
             if isinstance(k, str) and k.startswith("chk_"):
                 del st.session_state[k]
