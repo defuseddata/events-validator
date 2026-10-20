@@ -764,7 +764,7 @@ def render_builder():
             st.rerun()
 
     try:
-        existing_schema_files = set(list_schemas())
+        existing_schema_files = set(list_schemas(max_age=30))
         schema_list_error = None
     except Exception as e:
         # Fail closed: without the list the overwrite guard can't tell new from existing.

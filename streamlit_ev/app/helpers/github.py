@@ -12,6 +12,7 @@ that stores event validation schemas. It supports:
 import os
 import json
 import base64
+import time
 import requests
 import streamlit as st
 from typing import Optional, Dict, List, Any, Tuple
@@ -90,12 +91,33 @@ class GitHubListError(Exception):
     """Raised when the schema list cannot be fetched from GitHub."""
 
 
-def list_schemas(branch: str = DEFAULT_BRANCH) -> List[str]:
+# Short-lived cache of schema listings, keyed by branch: {branch: (fetched_at, names)}.
+# Only successful listings are stored, so an error never turns into a cached "no schemas".
+_schema_list_cache: Dict[str, Tuple[float, List[str]]] = {}
+
+
+def invalidate_schema_list_cache() -> None:
+    """Drop cached schema listings (after a write, a branch change or a manual refresh)."""
+    _schema_list_cache.clear()
+
+
+def _branch_is_accessible(branch: str) -> bool:
+    """True if the branch exists and the token can see it (distinguishes a missing
+    schemas/ folder from a 404 caused by a bad token or a missing branch)."""
+    url = f"{GITHUB_API_BASE}/repos/{SCHEMA_REPO_OWNER}/{SCHEMA_REPO_NAME}/branches/{branch}"
+    try:
+        return requests.get(url, headers=_get_headers(), timeout=10).status_code == 200
+    except requests.exceptions.RequestException:
+        return False
+
+
+def list_schemas(branch: str = DEFAULT_BRANCH, max_age: float = 0) -> List[str]:
     """
     List all schema files in the repository for a given branch.
 
     Args:
         branch: The branch name to list schemas from.
+        max_age: Serve a cached listing no older than this many seconds (0 = always fetch).
 
     Returns:
         List of schema filenames (e.g., ["purchase.json", "add_to_cart.json"]).
@@ -103,26 +125,36 @@ def list_schemas(branch: str = DEFAULT_BRANCH) -> List[str]:
     Raises:
         GitHubListError: If the GitHub API call fails. An empty list always means
             "no schemas", never "could not check" (the overwrite guard relies on it).
+            A 404 on the schemas folder is an empty list only if the branch itself
+            is accessible; GitHub also answers 404 for a bad token on a private repo.
     """
     if not is_configured():
         return []
+
+    cached = _schema_list_cache.get(branch)
+    if max_age and cached and time.monotonic() - cached[0] < max_age:
+        return list(cached[1])
 
     url = f"{GITHUB_API_BASE}/repos/{SCHEMA_REPO_OWNER}/{SCHEMA_REPO_NAME}/contents/{SCHEMA_REPO_PATH}"
     params = {"ref": branch}
 
     try:
         response = requests.get(url, headers=_get_headers(), params=params, timeout=10)
-        response.raise_for_status()
-
-        files = response.json()
-        schema_files = [
-            f["name"] for f in files
-            if f["type"] == "file" and f["name"].endswith(".json") and f["name"] != "repo.json"
-        ]
-        return sorted(schema_files)
+        if response.status_code == 404 and _branch_is_accessible(branch):
+            schema_files = []
+        else:
+            response.raise_for_status()
+            files = response.json()
+            schema_files = sorted(
+                f["name"] for f in files
+                if f["type"] == "file" and f["name"].endswith(".json") and f["name"] != "repo.json"
+            )
     except requests.exceptions.RequestException as e:
         print(f"Error listing schemas: {e}")
         raise GitHubListError(f"Could not list schemas on branch '{branch}': {e}") from e
+
+    _schema_list_cache[branch] = (time.monotonic(), schema_files)
+    return list(schema_files)
 
 
 def read_schema(schema_name: str, branch: str = DEFAULT_BRANCH) -> Dict[str, Any]:
@@ -292,6 +324,7 @@ def write_schema(
     try:
         response = requests.put(url, headers=_get_headers(), json=body, timeout=30)
         response.raise_for_status()
+        invalidate_schema_list_cache()
         return True, f"Successfully saved {schema_name}"
     except requests.exceptions.RequestException as e:
         error_msg = str(e)
