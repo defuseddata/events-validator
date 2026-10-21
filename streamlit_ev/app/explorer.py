@@ -9,6 +9,8 @@ from helpers.storage import (
     write_schema,
     is_github_mode,
     get_current_branch,
+    direct_default_branch_save_blocked,
+    DEFAULT_BRANCH_BLOCKED_MESSAGE,
     clear_cache,
 )
 from helpers.components import render_branch_selector, render_storage_status, render_commit_history
@@ -127,7 +129,10 @@ def render_explorer():
                         sync_selection.setdefault(s, []).append(param)
 
             if sync_selection:
-                if st.button("Sync Selected Schemas", type="primary"):
+                default_branch_blocked = direct_default_branch_save_blocked()
+                if default_branch_blocked:
+                    st.warning(DEFAULT_BRANCH_BLOCKED_MESSAGE)
+                if st.button("Sync Selected Schemas", type="primary", disabled=default_branch_blocked):
                     success_count = 0
                     with st.spinner("Syncing..."):
                         for s_name in sync_selection.keys():
@@ -278,7 +283,10 @@ def render_explorer():
                             st.markdown("---")
 
             if crit or minor:
-                if st.button("Sync with Repo", key=f"fix-{schema_file}"):
+                default_branch_blocked = direct_default_branch_save_blocked()
+                if default_branch_blocked:
+                    st.warning(DEFAULT_BRANCH_BLOCKED_MESSAGE)
+                if st.button("Sync with Repo", key=f"fix-{schema_file}", disabled=default_branch_blocked):
                     success, msgs = update_schema_full(schema_file, st.session_state.repo)
                     if success:
                         st.success("Schema updated!")

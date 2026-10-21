@@ -9,6 +9,8 @@ from helpers.storage import (
     read_schemas_parallel,
     is_github_mode,
     get_current_branch,
+    direct_default_branch_save_blocked,
+    DEFAULT_BRANCH_BLOCKED_MESSAGE,
     clear_cache,
 )
 from helpers.components import render_branch_selector, render_storage_status
@@ -503,7 +505,10 @@ def newParamBuilder(param_id):
 
     st.markdown("---")
     # SAVE PARAMETER
-    if st.button("Save All Parameters", type="primary"):
+    default_branch_blocked = direct_default_branch_save_blocked()
+    if default_branch_blocked:
+        st.warning(DEFAULT_BRANCH_BLOCKED_MESSAGE)
+    if st.button("Save All Parameters", type="primary", disabled=default_branch_blocked):
         repo = st.session_state.get("repo", {})
         saved_count = 0
         errors = []
@@ -609,6 +614,10 @@ def confirm_update_dialog(full_schema_map, param_name):
 
     # MASTER TOGGLE
     def toggle_all():
+        # Widget state can already be gone if the dialog was dismissed/rerun
+        # before the callback fired — nothing to propagate then.
+        if "master_toggle_schemas" not in st.session_state:
+            return
         b_val = st.session_state.master_toggle_schemas
         for s_name in full_schema_map.keys():
             st.session_state[f"chk_{s_name}"] = b_val
@@ -669,7 +678,10 @@ def confirm_update_dialog(full_schema_map, param_name):
             st.rerun()
             
     with col2:
-        if st.button("Confirm & Update", type="primary"):
+        default_branch_blocked = direct_default_branch_save_blocked()
+        if default_branch_blocked:
+            st.warning(DEFAULT_BRANCH_BLOCKED_MESSAGE)
+        if st.button("Confirm & Update", type="primary", disabled=default_branch_blocked):
             # 1. Update Selected Schemas on GCP
             updates_only = {name: full_schema_map[name]["new"] for name in selected_schemas}
             
@@ -871,7 +883,10 @@ def edit_param_dialog(param_name):
     if new_type != current_type:
         st.info(f"💡 Type changed from `{current_type}` to `{new_type}`.")
 
-    if st.button("Save"):
+    default_branch_blocked = direct_default_branch_save_blocked()
+    if default_branch_blocked:
+        st.warning(DEFAULT_BRANCH_BLOCKED_MESSAGE)
+    if st.button("Save", disabled=default_branch_blocked):
         if new_type == "number" and mode == "Fixed Value":
              if isinstance(new_value, str) and new_value.strip() != "":
                  try: float(new_value)

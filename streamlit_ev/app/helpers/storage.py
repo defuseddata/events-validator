@@ -28,6 +28,33 @@ def is_github_mode() -> bool:
     return GITHUB_CONFIGURED
 
 
+DEFAULT_BRANCH_BLOCKED_MESSAGE = (
+    "Saving straight to the default branch is disabled: it is the production branch and a "
+    "save there reaches the validator right after the sync. Create a branch (Create Branch at "
+    "the top of the page), make the change there and open a pull request."
+)
+
+
+def _writes_to_blocked_default_branch(branch: Optional[str] = None) -> bool:
+    """True when a write to `branch` (default: the current one) would hit the default branch.
+
+    The default branch is what the sync workflow publishes to the validator, so a
+    direct write is a direct production change. Blocked unless
+    ALLOW_SAVE_TO_DEFAULT_BRANCH is set (e.g. a single user who accepts that).
+    """
+    if not GITHUB_CONFIGURED:
+        return False
+    if os.getenv("ALLOW_SAVE_TO_DEFAULT_BRANCH", "").strip().lower() in ("1", "true", "yes"):
+        return False
+    from helpers.github import DEFAULT_BRANCH
+    return (branch or get_current_branch()) == DEFAULT_BRANCH
+
+
+def direct_default_branch_save_blocked() -> bool:
+    """True when saving from the UI (current branch) would commit straight to the default branch."""
+    return _writes_to_blocked_default_branch()
+
+
 def get_storage_info() -> Dict[str, Any]:
     """Get information about the current storage configuration."""
     if GITHUB_CONFIGURED:
@@ -155,6 +182,8 @@ def write_schema(
     if GITHUB_CONFIGURED:
         from helpers.github import write_schema as gh_write_schema, get_current_branch
         branch = branch or get_current_branch()
+        if _writes_to_blocked_default_branch(branch):
+            return False, DEFAULT_BRANCH_BLOCKED_MESSAGE
         return gh_write_schema(schema_name, content, branch, commit_message)
     else:
         from helpers.gcp import uploadJson
@@ -187,6 +216,8 @@ def write_multiple_schemas(
     if GITHUB_CONFIGURED:
         from helpers.github import write_multiple_schemas as gh_write_multiple, get_current_branch
         branch = branch or get_current_branch()
+        if _writes_to_blocked_default_branch(branch):
+            return 0, [DEFAULT_BRANCH_BLOCKED_MESSAGE]
         return gh_write_multiple(schemas, branch, commit_message)
     else:
         success_count = 0
@@ -235,6 +266,8 @@ def write_repo(
     if GITHUB_CONFIGURED:
         from helpers.github import write_repo_json, get_current_branch
         branch = branch or get_current_branch()
+        if _writes_to_blocked_default_branch(branch):
+            return False, DEFAULT_BRANCH_BLOCKED_MESSAGE
         return write_repo_json(content, branch, commit_message)
     else:
         from helpers.gcp import writeRepoToJson

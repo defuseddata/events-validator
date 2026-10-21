@@ -398,7 +398,7 @@ If you deployed using the steps above:
   1.  Created a dedicated `streamlit-worker` Service Account.
   2.  Granted it `Storage Object Admin` permissions on the schema bucket.
   3.  Granted it `BigQuery Data Viewer` and `Job User` permissions for reading logs.
-  4.  Generated `streamlit_ev/.env` with your project, bucket, and BigQuery details.
+  4.  Generated `streamlit_ev/.env` with your project, bucket, and BigQuery details. When GitOps is enabled it also contains the GitHub settings (`GITHUB_TOKEN`, `SCHEMA_REPO_OWNER`, `SCHEMA_REPO_NAME`, ...), so the local app runs in GitHub mode like the Cloud Run one. Terraform rewrites this file on every `apply`; change these values in `terraform_ui/terraform.tfvars`, not in `.env`.
 
 ### Local Start
 1.  **Authenticate**: `gcloud auth application-default login`

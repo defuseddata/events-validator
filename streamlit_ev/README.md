@@ -95,6 +95,14 @@ The Terraform configuration supports two deployment modes for securing the appli
 | `GCP_PROJECT` | Your Google Cloud Project ID. |
 | `REPO_JSON_FILE` | Filename for the parameter repository (default: `repo.json`). |
 | `GOOGLE_APPLICATION_CREDENTIALS` | (Local Only) Path to your GCP service account key. |
+| `SCHEMA_REPO_OWNER` | (Optional) GitHub user or organization that owns the schema repository. |
+| `SCHEMA_REPO_NAME` | (Optional) Name of the schema repository. **Setting both `SCHEMA_REPO_OWNER` and `SCHEMA_REPO_NAME` switches the app to GitHub mode**; if either is empty it reads and writes GCS directly. |
+| `GITHUB_TOKEN` | (Optional) Personal access token with `repo` and `workflow` scopes. Required for saving in GitHub mode. |
+| `SCHEMA_REPO_PATH` | (Optional) Folder with schemas inside the repository (default: `schemas`). |
+| `SCHEMA_REPO_DEFAULT_BRANCH` | (Optional) Default branch (default: `main`). |
+| `ALLOW_SAVE_TO_DEFAULT_BRANCH` | (Optional) In GitHub mode, saving from the Builder straight to the default branch is blocked, because a save there reaches the validator right after the sync. Set to `true` to allow it (e.g. a single user). `install.sh` asks about it and writes it to `terraform_ui/terraform.tfvars` (`allow_save_to_default_branch`), which feeds both the Cloud Run service and the generated `.env`. |
+
+> If you deployed with `terraform_ui`, these variables are written to `.env` for you, taken from the GitHub settings in `terraform_ui/terraform.tfvars`. Terraform regenerates the file on every `apply`, so change them in `terraform.tfvars`, not in `.env`.
 
 ---
 

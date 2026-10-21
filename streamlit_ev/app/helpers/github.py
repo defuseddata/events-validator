@@ -86,6 +86,10 @@ def list_branches() -> List[str]:
         return [DEFAULT_BRANCH]
 
 
+class GitHubListError(Exception):
+    """Raised when the schema list cannot be fetched from GitHub."""
+
+
 def list_schemas(branch: str = DEFAULT_BRANCH) -> List[str]:
     """
     List all schema files in the repository for a given branch.
@@ -95,6 +99,10 @@ def list_schemas(branch: str = DEFAULT_BRANCH) -> List[str]:
 
     Returns:
         List of schema filenames (e.g., ["purchase.json", "add_to_cart.json"]).
+
+    Raises:
+        GitHubListError: If the GitHub API call fails. An empty list always means
+            "no schemas", never "could not check" (the overwrite guard relies on it).
     """
     if not is_configured():
         return []
@@ -114,7 +122,7 @@ def list_schemas(branch: str = DEFAULT_BRANCH) -> List[str]:
         return sorted(schema_files)
     except requests.exceptions.RequestException as e:
         print(f"Error listing schemas: {e}")
-        return []
+        raise GitHubListError(f"Could not list schemas on branch '{branch}': {e}") from e
 
 
 def read_schema(schema_name: str, branch: str = DEFAULT_BRANCH) -> Dict[str, Any]:

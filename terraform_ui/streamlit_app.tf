@@ -11,10 +11,17 @@ resource "google_cloud_run_v2_service" "streamlit_ui" {
   location = var.region
   provider = google-beta
   ingress      = var.use_classic_load_balancer ? "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER" : "INGRESS_TRAFFIC_ALL"
-  launch_stage = var.use_classic_load_balancer ? "GA" : "BETA"
+  launch_stage = "GA" # IAP directly on Cloud Run is GA (since 2026-03-13)
   iap_enabled  = var.use_classic_load_balancer ? false : true
   depends_on   = [google_artifact_registry_repository.streamlit_repo]
-  
+
+  lifecycle {
+    # The API reports service-level scaling defaults (manual_instance_count = 0).
+    # Instance limits are set in template.scaling; without this every plan wants to
+    # drop the reported block. Never set manual_instance_count here: 0 disables the service.
+    ignore_changes = [scaling]
+  }
+
   template {
     scaling {
       min_instance_count = var.ui_min_instances
@@ -65,6 +72,10 @@ resource "google_cloud_run_v2_service" "streamlit_ui" {
       env {
         name  = "SCHEMA_REPO_DEFAULT_BRANCH"
         value = var.schema_repo_branch
+      }
+      env {
+        name  = "ALLOW_SAVE_TO_DEFAULT_BRANCH"
+        value = var.allow_save_to_default_branch ? "true" : "false"
       }
     }
   }

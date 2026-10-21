@@ -16,6 +16,7 @@ from helpers.storage import (
     write_repo,
     is_github_mode,
     get_current_branch,
+    direct_default_branch_save_blocked,
     clear_cache,
     list_schemas,
 )
@@ -762,7 +763,14 @@ def render_builder():
             st.session_state.pop("loaded_schema_name", None)
             st.rerun()
 
-    existing_schema_files = set(list_schemas())
+    try:
+        existing_schema_files = set(list_schemas())
+        schema_list_error = None
+    except Exception as e:
+        # Fail closed: without the list the overwrite guard can't tell new from existing.
+        existing_schema_files = set()
+        schema_list_error = str(e)
+        st.error(f"Cannot verify existing schemas, saving is disabled: {schema_list_error}")
     current_name = st.session_state.event_name.strip()
     if current_name and current_name != st.session_state.get("loaded_schema_name"):
         st.session_state.pop("loaded_schema_name", None)
@@ -895,7 +903,15 @@ def render_builder():
 
         empty_match_value_errors = find_empty_match_value_errors(schema)
 
-        if event_name_conflict:
+        default_branch_blocked = direct_default_branch_save_blocked()
+
+        if event_name_conflict or schema_list_error or default_branch_blocked:
+            if default_branch_blocked:
+                st.warning(
+                    f"Saving straight to '{get_current_branch()}' is disabled: it is the production branch "
+                    "and a save there reaches the validator right after the sync. "
+                    "Create a branch (Create Branch above), save there and open a pull request."
+                )
             st.button("Save to GCS" if not is_github_mode() else "Save to GitHub", disabled=True, key="send_gcp_btn")
         elif st.session_state.event_name.strip():
             # Determine button label based on storage mode
