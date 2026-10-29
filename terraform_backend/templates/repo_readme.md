@@ -24,11 +24,10 @@ schemas/
 
 ## Branch Strategy
 
-| Branch | Purpose | GCS Prefix |
-|--------|---------|------------|
-| `main` | Production schemas | Root (no prefix) |
-| `staging` | Pre-production testing | `staging/` |
-| any other branch | Development branches | `branches/{branch-name}/` |
+| Branch | Purpose | In GCS |
+|--------|---------|--------|
+| `main` | Production schemas | Bucket root, read by the validator |
+| any other branch | Work in progress | Not synced; it reaches GCS only after a merged pull request |
 
 ## Authentication (Workload Identity Federation)
 This repository is configured to use **Keyless Authentication** (Workload Identity Federation) for security.
@@ -145,11 +144,10 @@ Example:
 
 ### Main Sync Workflow (`sync-to-gcs.yml`)
 
-- Triggers on push to `main`, `staging`, or `feature/*` branches
-- Validates JSON syntax
-- Detects changed files (incremental sync)
-- Syncs only changed files to GCS
-- Supports branch-based prefixes
+- Syncs to GCS only on push to `main`; the validator reads the bucket root
+- On pull requests to `main` it validates JSON syntax and comments with the changed schemas (no sync)
+- Detects changed files (incremental sync) and removes schemas deleted from the repo (`repo.json` is never deleted)
+- A manual run (`workflow_dispatch`) syncs only from `main`; `force_sync` re-uploads every schema
 
 ## Local Development
 

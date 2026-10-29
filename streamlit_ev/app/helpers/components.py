@@ -212,7 +212,5 @@ def render_sync_status():
 
     if current == "main":
         st.success("Schemas are automatically synced to GCS on push to main")
-    elif current == "staging":
-        st.info("Staging branch schemas are synced to GCS with 'staging/' prefix")
     else:
-        st.warning(f"Feature branch '{current}' schemas are synced to GCS with 'branches/' prefix. Merge to main for production sync.")
+        st.info(f"Branch '{current}' lives on GitHub only. Its schemas reach GCS (and the validator) when it is merged to main.")

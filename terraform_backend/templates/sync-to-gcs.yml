@@ -3,7 +3,7 @@ name: Sync Schemas to GCS
 on:
   push:
     branches:
-      - '**'
+      - main
     paths:
       - 'schemas/**'
   pull_request:
@@ -11,13 +11,8 @@ on:
       - main
     paths:
       - 'schemas/**'
-  delete:
   workflow_dispatch:
     inputs:
-      branch:
-        description: 'Branch to sync'
-        required: false
-        default: 'main'
       force_sync:
         description: 'Force sync all files'
         required: false
@@ -31,7 +26,6 @@ env:
 jobs:
   validate:
     name: Validate Schemas
-    if: github.event_name != 'delete'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -71,33 +65,15 @@ jobs:
 
   detect-changes:
     name: Detect Changed Files
-    if: github.event_name != 'delete'
     runs-on: ubuntu-latest
     outputs:
       changed_files: ${{ steps.changes.outputs.changed_files }}
       has_changes: ${{ steps.changes.outputs.has_changes }}
-      branch_prefix: ${{ steps.branch.outputs.prefix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Determine branch prefix
-        id: branch
-        run: |
-          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
-          if [ "$BRANCH_NAME" = "main" ]; then
-            PREFIX=""
-          elif [ "$BRANCH_NAME" = "staging" ]; then
-            PREFIX="staging/"
-          else
-            # For feature branches, use sanitized branch name
-            SAFE_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9]/-/g' | sed 's/--*/-/g')
-            PREFIX="branches/${SAFE_BRANCH}/"
-          fi
-          echo "prefix=$PREFIX" >> $GITHUB_OUTPUT
-          echo "Branch prefix: $PREFIX"
 
       - name: Detect changed schema files
         id: changes
@@ -141,7 +117,9 @@ jobs:
   sync-to-gcs:
     name: Sync to GCS
     needs: [validate, detect-changes]
-    if: needs.detect-changes.outputs.has_changes == 'true' && github.event_name != 'pull_request'
+    # Only main reaches GCS: the validator reads the bucket root, which is production.
+    # Branches live on GitHub and go to production through a merged PR.
+    if: needs.detect-changes.outputs.has_changes == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -164,10 +142,7 @@ jobs:
         env:
           CHANGED_FILES: ${{ needs.detect-changes.outputs.changed_files }}
         run: |
-          PREFIX="${{ needs.detect-changes.outputs.branch_prefix }}"
-
           echo "Syncing to GCS bucket: ${{ env.GCS_BUCKET }}"
-          echo "Prefix: ${PREFIX:-'(root)'}"
           echo "Files to sync:"
           echo "$CHANGED_FILES"
 
@@ -175,7 +150,7 @@ jobs:
           while IFS= read -r file; do
             [ -z "$file" ] && continue
             FILENAME=$(basename "$file")
-            DEST="gs://${{ env.GCS_BUCKET }}/${PREFIX}${FILENAME}"
+            DEST="gs://${{ env.GCS_BUCKET }}/${FILENAME}"
             if [ -f "$file" ]; then
               echo "Uploading $file -> $DEST"
               gsutil cp "$file" "$DEST"
@@ -188,9 +163,8 @@ jobs:
 
       - name: Verify sync
         run: |
-          PREFIX="${{ needs.detect-changes.outputs.branch_prefix }}"
-          echo "Listing schemas in GCS (prefix: ${PREFIX:-'root'})..."
-          gsutil ls "gs://${{ env.GCS_BUCKET }}/${PREFIX}*.json" || echo "No files found with prefix"
+          echo "Listing schemas in GCS..."
+          gsutil ls "gs://${{ env.GCS_BUCKET }}/*.json" || echo "No files found"
 
   notify-on-pr:
     name: PR Validation Summary
@@ -233,29 +207,3 @@ jobs:
               repo: context.repo.repo,
               body: body
             });
-
-  cleanup-branch-prefix:
-    name: Cleanup Branch Prefix on Delete
-    if: github.event_name == 'delete' && github.event.ref_type == 'branch'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Remove branch schemas from GCS
-        run: |
-          BRANCH_NAME="${{ github.event.ref }}"
-          SAFE_BRANCH=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9]/-/g' | sed 's/--*/-/g')
-          PREFIX="branches/${SAFE_BRANCH}/"
-
-          echo "Cleaning up GCS prefix: $PREFIX"
-          gsutil -m rm -r "gs://${{ env.GCS_BUCKET }}/${PREFIX}" || echo "No files to clean up"
