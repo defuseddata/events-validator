@@ -94,8 +94,9 @@ jobs:
               CHANGED_FILES=$(find ${{ env.SCHEMA_PATH }} -name "*.json" -type f | sort)
             else
               # One path per line (file names may contain spaces); core.quotepath=false
-              # keeps git from quoting names with non-ASCII characters.
-              CHANGED_FILES=$(git -c core.quotepath=false diff --name-only $BASE_SHA ${{ github.sha }} -- '${{ env.SCHEMA_PATH }}/*.json')
+              # keeps git from quoting names with non-ASCII characters; --no-renames
+              # lists a renamed schema as a delete plus an add, so the old object is removed.
+              CHANGED_FILES=$(git -c core.quotepath=false diff --name-only --no-renames $BASE_SHA ${{ github.sha }} -- '${{ env.SCHEMA_PATH }}/*.json')
             fi
           fi
 
