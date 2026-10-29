@@ -22,13 +22,15 @@ builder.render_builder()
 """
 
 
-def make_get(schemas_status, branch_status, calls):
+def make_get(schemas_status, branch_status, calls, listing=None):
     def fake_get(url, **kwargs):
         r = MagicMock()
         r.json.return_value = []
         if url.endswith("/contents/schemas"):
             calls.append(url)
             r.status_code = schemas_status
+            if schemas_status == 200:
+                r.json.return_value = [{"name": n, "type": "file"} for n in (listing if listing is not None else [])]
         elif url.endswith("/branches/test"):
             r.status_code = branch_status
         elif url.endswith("/branches"):
@@ -54,9 +56,10 @@ class TestBuilderSchemaList(unittest.TestCase):
             p.start()
             self.addCleanup(p.stop)
 
-    def run_builder(self, schemas_status, branch_status):
+    def run_builder(self, schemas_status, branch_status, listing=None):
         calls = []
-        patcher = patch.object(github.requests, "get", make_get(schemas_status, branch_status, calls))
+        self.listing = [] if listing is None else listing
+        patcher = patch.object(github.requests, "get", make_get(schemas_status, branch_status, calls, self.listing))
         patcher.start()
         self.addCleanup(patcher.stop)
         return AppTest.from_string(SCRIPT, default_timeout=30).run(), calls
@@ -77,6 +80,31 @@ class TestBuilderSchemaList(unittest.TestCase):
         at.text_input(key="search_param").set_value("a").run()
         at.text_input(key="search_param").set_value("ab").run()
         self.assertEqual(len(calls), 1)
+
+    def _save_setup(self):
+        self.puts = MagicMock()
+        self.puts.return_value = MagicMock(status_code=201, raise_for_status=MagicMock())
+        for p in (
+            patch.object(github, "GITHUB_TOKEN", "t"),
+            patch.object(github, "get_file_sha", return_value=None),
+            patch.object(github.requests, "put", self.puts),
+        ):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_save_rechecks_listing_and_refuses_a_schema_added_meanwhile(self):
+        self._save_setup()
+        at, _ = self.run_builder(schemas_status=200, branch_status=200)  # cached listing: empty
+        self.listing.append("first_event.json")  # someone merges it after the page loaded
+        at.button(key="send_gcp_btn").click().run()
+        self.assertFalse(self.puts.called)
+        self.assertTrue(any("already exists" in e.value for e in at.error))
+
+    def test_save_goes_through_when_nothing_changed(self):
+        self._save_setup()
+        at, _ = self.run_builder(schemas_status=200, branch_status=200)
+        at.button(key="send_gcp_btn").click().run()
+        self.assertEqual(self.puts.call_count, 1)
 
 
 if __name__ == "__main__":

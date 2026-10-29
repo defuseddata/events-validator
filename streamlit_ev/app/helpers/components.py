@@ -208,9 +208,11 @@ def render_sync_status():
     if not is_github_mode():
         return
 
+    from helpers.github import DEFAULT_BRANCH
+
     current = get_current_branch()
 
-    if current == "main":
-        st.success("Schemas are automatically synced to GCS on push to main")
+    if current == DEFAULT_BRANCH:
+        st.success(f"Schemas are automatically synced to GCS on push to {DEFAULT_BRANCH}")
     else:
-        st.info(f"Branch '{current}' lives on GitHub only. Its schemas reach GCS (and the validator) when it is merged to main.")
+        st.info(f"Branch '{current}' lives on GitHub only. Its schemas reach GCS (and the validator) when it is merged to {DEFAULT_BRANCH}.")

@@ -146,6 +146,7 @@ def render_repo():
         data = st.session_state.pending_confirmation
         st.warning(f"Update pending for parameter '{data['param_name']}'. Please review impacts.")
         if st.button("Review & Confirm Updates", type="primary"):
+            reset_confirm_selection()
             confirm_update_dialog(data["map"], data["param_name"])
 
 
@@ -599,6 +600,20 @@ def newParamBuilder(param_id):
              st.warning("No valid parameters to save.")
 
 
+def reset_confirm_selection():
+    """Forget the selection state of "Confirm Schema Updates".
+
+    A dialog closed with X/Esc never runs its Cancel/Confirm cleanup, so the
+    selection (our own set plus the chk_* widget keys) would leak into the next
+    time the dialog opens. Called whenever the dialog is about to open.
+    """
+    for key in ("confirm_unchecked", "master_toggle_schemas", "confirm_update_search"):
+        st.session_state.pop(key, None)
+    for k in list(st.session_state.keys()):
+        if isinstance(k, str) and k.startswith("chk_"):
+            del st.session_state[k]
+
+
 @st.dialog("Confirm Schema Updates", width="large")
 def confirm_update_dialog(full_schema_map, param_name):
     # Retrieve draft data from session state (passed implicitly via pending_confirmation logic)
@@ -674,14 +689,7 @@ def confirm_update_dialog(full_schema_map, param_name):
     def cleanup_confirmation():
         if "pending_confirmation" in st.session_state:
             del st.session_state.pending_confirmation
-        if "master_toggle_schemas" in st.session_state:
-            del st.session_state.master_toggle_schemas
-        if "confirm_update_search" in st.session_state:
-            del st.session_state.confirm_update_search
-        st.session_state.pop("confirm_unchecked", None)
-        for k in list(st.session_state.keys()):
-            if isinstance(k, str) and k.startswith("chk_"):
-                del st.session_state[k]
+        reset_confirm_selection()
 
     st.markdown("---")
     col1, col2 = st.columns([1,1])
@@ -1003,6 +1011,7 @@ def edit_param_dialog(param_name):
                     }
         
         if full_schema_map:
+            reset_confirm_selection()
             st.session_state.pending_confirmation = {
                 "map": full_schema_map,
                 "param_name": param_name,

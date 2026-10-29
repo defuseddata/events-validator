@@ -22,6 +22,8 @@ repo.direct_default_branch_save_blocked = lambda: False
 repo.render_diff_ui = lambda *a, **k: None
 st.session_state.setdefault("repo", {{}})
 st.session_state.setdefault("pending_confirmation", {{"draft_param_data": None}})
+if st.session_state.pop("reopen", False):
+    repo.reset_confirm_selection()
 fmap = {{n: {{"original": {{}}, "new": {{}}}} for n in ("a", "b", "c")}}
 repo.confirm_update_dialog(fmap, "p")
 """
@@ -37,6 +39,16 @@ class TestConfirmSelection(unittest.TestCase):
         self.assertFalse(at.checkbox(key="chk_b").value)
         next(b for b in at.button if b.label == "Confirm & Update").click().run()
         self.assertEqual(at.session_state["applied"], ["a", "c"])
+
+    def test_selection_does_not_leak_into_a_reopened_dialog(self):
+        at = AppTest.from_string(SCRIPT, default_timeout=30).run()
+        at.checkbox(key="chk_b").uncheck().run()
+        # Dialog closed with X/Esc (no Cancel/Confirm cleanup), then opened again.
+        at.session_state["reopen"] = True
+        at.run()
+        self.assertTrue(at.checkbox(key="chk_b").value)
+        next(b for b in at.button if b.label == "Confirm & Update").click().run()
+        self.assertEqual(at.session_state["applied"], ["a", "b", "c"])
 
 
 if __name__ == "__main__":

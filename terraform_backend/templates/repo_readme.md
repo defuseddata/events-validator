@@ -147,7 +147,7 @@ Example:
 - Syncs to GCS only on push to `main`; the validator reads the bucket root
 - On pull requests to `main` it validates JSON syntax and comments with the changed schemas (no sync)
 - Detects changed files (incremental sync) and removes schemas deleted from the repo (`repo.json` is never deleted)
-- A manual run (`workflow_dispatch`) syncs only from `main`; `force_sync` re-uploads every schema
+- A manual run (`workflow_dispatch`) syncs only from `main` and always re-uploads every schema (there is no previous commit to diff against), with or without `force_sync`; it does not remove schemas deleted from the repo
 
 ## Local Development
 
