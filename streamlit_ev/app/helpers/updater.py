@@ -223,7 +223,7 @@ def check_schema_health(schema_data: dict, repo_data: dict) -> dict:
     Compares schema parameters against the repository.
     Returns a dict with 'critical' and 'minor' lists of parameter names.
     - Critical: Type mismatch.
-    - Minor: Description or Default Value mismatch.
+    - Minor: Description, Default Value or Regex mismatch.
     """
     health = {"critical": [], "minor": []}
 
@@ -271,6 +271,11 @@ def check_schema_health(schema_data: dict, repo_data: dict) -> dict:
         if s_val != e_val:
             mismatch = True
 
+        # The repo is the source of truth for the pattern in both directions; ""
+        # (no pattern) and a missing key mean the same thing.
+        if (schema_param.get("regex") or "") != (expected_props.get("regex") or ""):
+            mismatch = True
+
         # Nested Logic for Arrays
         if expected_props.get("type") == "array" and "nestedSchema" in expected_props:
             current_nested = schema_param.get("nestedSchema", {})
@@ -288,6 +293,9 @@ def check_schema_health(schema_data: dict, repo_data: dict) -> dict:
                         mismatch = True
                         break
                     if cv.get("description", "") != ev.get("description", ""):
+                        mismatch = True
+                        break
+                    if (cv.get("regex") or "") != (ev.get("regex") or ""):
                         mismatch = True
                         break
 

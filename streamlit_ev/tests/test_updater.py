@@ -7,7 +7,7 @@ import os
 # Add app to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../app')))
 
-from helpers.updater import construct_schema_definition, find_impacted_schemas, rebuild_schema_dry_run
+from helpers.updater import check_schema_health, construct_schema_definition, find_impacted_schemas, rebuild_schema_dry_run
 
 class TestUpdater(unittest.TestCase):
 
@@ -106,6 +106,41 @@ class TestConstructSchemaDefinitionRegex(unittest.TestCase):
         })
         self.assertEqual(props["nestedSchema"]["sku"]["regex"], "^[A-Z]+$")
         self.assertNotIn("regex", props["nestedSchema"]["name"])
+
+class TestSchemaHealthRegex(unittest.TestCase):
+
+    @staticmethod
+    def _health(schema_param, repo_param):
+        return check_schema_health({"p": schema_param}, {"p": repo_param})["minor"]
+
+    def test_schema_missing_the_repo_pattern_is_flagged(self):
+        self.assertEqual(self._health({"type": "string", "description": "d"},
+                                      {"type": "string", "description": "d", "regex": "^a$"}), ["p"])
+
+    def test_different_pattern_is_flagged(self):
+        self.assertEqual(self._health({"type": "string", "description": "d", "regex": "^a$"},
+                                      {"type": "string", "description": "d", "regex": "^b$"}), ["p"])
+
+    def test_pattern_the_repo_does_not_have_is_flagged(self):
+        self.assertEqual(self._health({"type": "string", "description": "d", "regex": "^a$"},
+                                      {"type": "string", "description": "d", "regex": ""}), ["p"])
+
+    def test_same_pattern_or_no_pattern_is_healthy(self):
+        for schema_param, repo_param in (
+            ({"type": "string", "description": "d", "regex": "^a$"}, {"type": "string", "description": "d", "regex": "^a$"}),
+            ({"type": "string", "description": "d"}, {"type": "string", "description": "d", "regex": ""}),
+            ({"type": "string", "description": "d"}, {"type": "string", "description": "d"}),
+        ):
+            self.assertEqual(self._health(schema_param, repo_param), [])
+
+    def test_nested_pattern_mismatch_is_flagged(self):
+        repo_param = {"type": "array", "description": "d",
+                      "nestedSchema": {"sku": {"type": "string", "description": "s", "regex": "^[A-Z]+$"}}}
+        stale = {"type": "array", "description": "d",
+                 "nestedSchema": {"sku": {"type": "string", "description": "s"}}}
+        synced = construct_schema_definition(repo_param)
+        self.assertEqual(self._health(stale, repo_param), ["p"])
+        self.assertEqual(self._health(synced, repo_param), [])
 
 if __name__ == '__main__':
     unittest.main()
