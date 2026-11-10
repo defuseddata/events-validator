@@ -100,12 +100,13 @@ def set_current_branch(branch: str):
 
 
 # Schema operations
-def list_schemas(branch: Optional[str] = None) -> List[str]:
+def list_schemas(branch: Optional[str] = None, max_age: float = 0) -> List[str]:
     """
     List all schema files.
 
     Args:
         branch: Branch to list from (GitHub mode only).
+        max_age: Accept a cached listing up to this many seconds old (GitHub mode only).
 
     Returns:
         List of schema filenames.
@@ -113,7 +114,7 @@ def list_schemas(branch: Optional[str] = None) -> List[str]:
     if GITHUB_CONFIGURED:
         from helpers.github import list_schemas as gh_list_schemas, get_current_branch
         branch = branch or get_current_branch()
-        return gh_list_schemas(branch)
+        return gh_list_schemas(branch, max_age=max_age)
     else:
         from helpers.gcp import listAllSchemas
         all_files = listAllSchemas()
@@ -351,6 +352,9 @@ def get_commit_history(
 # Cache invalidation
 def clear_cache():
     """Clear all storage-related caches."""
+    if GITHUB_CONFIGURED:
+        from helpers.github import invalidate_schema_list_cache
+        invalidate_schema_list_cache()
     if "explorer_cache" in st.session_state:
         st.session_state.explorer_cache = {"schemas": {}, "health": {}, "last_sync": None}
     if "repo" in st.session_state:

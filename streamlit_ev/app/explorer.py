@@ -159,6 +159,11 @@ def render_explorer():
     if status_parts:
         st.markdown("&nbsp;&nbsp;&nbsp;".join(status_parts))
 
+    # Show commit history if in GitHub mode
+    if is_github_mode():
+        with st.expander("Recent Changes", expanded=False):
+            render_commit_history(limit=5)
+
     if not schemas_content:
         st.info("No schemas found. Create a schema in the Builder or add files to the repository.")
         return
@@ -196,11 +201,6 @@ def render_explorer():
             label_visibility="collapsed",
             placeholder="Search schema",
         )
-
-    # Show commit history if in GitHub mode
-    if is_github_mode():
-        with st.expander("Recent Changes", expanded=False):
-            render_commit_history(limit=5)
 
     def schema_status(health):
         if health.get("critical"):

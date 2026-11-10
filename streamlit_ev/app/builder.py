@@ -764,7 +764,7 @@ def render_builder():
             st.rerun()
 
     try:
-        existing_schema_files = set(list_schemas())
+        existing_schema_files = set(list_schemas(max_age=30))
         schema_list_error = None
     except Exception as e:
         # Fail closed: without the list the overwrite guard can't tell new from existing.
@@ -888,6 +888,25 @@ def render_builder():
             """Save schema to storage (GitHub or GCS)."""
             # Write schema
             commit_msg = f"Update schema: {event_name}"
+
+            # The listing used for the "already exists" check can be up to 30 s old
+            # (cached), so a schema added meanwhile (e.g. a merged PR) would be
+            # overwritten. Re-check against a fresh listing right before writing.
+            if not is_editing_loaded_schema:
+                try:
+                    fresh_existing = set(list_schemas())
+                except Exception as e:
+                    st.session_state.upload_status = False
+                    st.session_state.upload_error = f"Cannot verify existing schemas, nothing was saved: {e}"
+                    return
+                if f"{event_name.strip()}.json" in fresh_existing:
+                    st.session_state.upload_status = False
+                    st.session_state.upload_error = (
+                        f"A schema named '{event_name.strip()}' already exists (it was added after this page "
+                        "loaded). Nothing was saved; pick a different name."
+                    )
+                    return
+
             success, message = write_schema(filename, data, commit_message=commit_msg)
 
             if success:
