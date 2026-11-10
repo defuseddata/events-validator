@@ -97,7 +97,8 @@ _schema_list_cache: Dict[str, Tuple[float, List[str]]] = {}
 
 
 def invalidate_schema_list_cache() -> None:
-    """Drop cached schema listings (after a write, a branch change or a manual refresh)."""
+    """Drop cached schema listings (after a write or a manual refresh). Switching
+    branches needs no invalidation: the cache is keyed by branch."""
     _schema_list_cache.clear()
 
 
