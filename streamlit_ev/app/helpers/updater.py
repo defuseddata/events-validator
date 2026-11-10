@@ -45,6 +45,10 @@ def construct_schema_definition(param_data: dict) -> dict:
     if final_value is not None:
         props["value"] = final_value
 
+    # The repo stores "" for "no regex"; only a real pattern belongs in the schema.
+    if param_data.get("regex"):
+        props["regex"] = param_data["regex"]
+
     # Handling Arrays
     if param_data.get("type") == "array" and "nestedSchema" in param_data:
         nested_export = {}
@@ -80,6 +84,9 @@ def construct_schema_definition(param_data: dict) -> dict:
 
             if n_final_val is not None:
                 n_props["value"] = n_final_val
+
+            if np.get("regex"):
+                n_props["regex"] = np["regex"]
 
             nested_export[nk] = n_props
 
