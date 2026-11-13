@@ -1,0 +1,12 @@
+# Local config with secrets (Terraform writes GITHUB_TOKEN into .env).
+.env
+.env.*
+!.env.example
+
+# Local tooling and caches; the image installs its own virtualenv.
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.DS_Store

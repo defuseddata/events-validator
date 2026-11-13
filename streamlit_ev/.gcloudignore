@@ -11,3 +11,9 @@ __pycache__/
 !requirements.txt
 node_modules/
 .dev/
+
+# Local config with secrets (Terraform writes GITHUB_TOKEN into .env). It must
+# never reach Cloud Build or the image; Cloud Run gets its settings from env vars.
+.env
+.env.*
+!.env.example

@@ -38,4 +38,6 @@ SCHEMA_REPO_DEFAULT_BRANCH=${var.schema_repo_branch}
 ALLOW_SAVE_TO_DEFAULT_BRANCH=${var.allow_save_to_default_branch}
 EOT
   filename = "${path.module}/../streamlit_ev/.env"
+  # Holds GITHUB_TOKEN: owner-only (the default is 0777).
+  file_permission = "0600"
 }
