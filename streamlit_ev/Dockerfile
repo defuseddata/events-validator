@@ -25,7 +25,9 @@ RUN uv sync --frozen --no-dev
 # Place the virtual environment in the PATH
 ENV PATH="/app/.venv/bin:$PATH"
 
-COPY . .
+# Copy only the application. An allowlist (rather than `COPY . .`) keeps local files
+# such as .env, which holds GITHUB_TOKEN, out of the image even if an ignore file is missed.
+COPY app ./app
 
 # Environment variables will be injected by Cloud Run
 EXPOSE 8080
