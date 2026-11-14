@@ -427,7 +427,9 @@ def update_repo_with_schema_usage(schema_name, schema_export_data):
 
     if updated:
         st.session_state.repo = repo
-        write_repo(repo, commit_message="Update schema usage tracking")
+        success, message = write_repo(repo, commit_message="Update schema usage tracking")
+        if not success:
+            st.warning(message)
 def readSchemaAndSetState(schema_data):
     internal = convert_export_to_internal(schema_data)
     st.session_state.schema = internal
