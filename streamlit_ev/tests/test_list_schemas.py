@@ -90,5 +90,34 @@ class TestListSchemas(unittest.TestCase):
         self.assertEqual(get.call_count, 2)
 
 
+@patch.object(github, "is_configured", return_value=True)
+@patch.object(github, "_get_headers", return_value={})
+class TestAuthHint(unittest.TestCase):
+    def setUp(self):
+        github.invalidate_schema_list_cache()
+
+    @staticmethod
+    def _http_error(status):
+        r = resp(status, {})
+        r.raise_for_status.side_effect = requests.exceptions.HTTPError(f"{status} Client Error", response=r)
+        return r
+
+    @patch.object(github.requests, "get")
+    def test_401_says_token_is_invalid_or_expired(self, get, *_):
+        get.return_value = self._http_error(401)
+        with self.assertRaises(github.GitHubListError) as ctx:
+            github.list_schemas("x")
+        self.assertIn("invalid or has expired", str(ctx.exception))
+        self.assertIn("github_token", str(ctx.exception))
+
+    @patch.object(github.requests, "get")
+    def test_other_errors_keep_the_original_message(self, get, *_):
+        get.return_value = self._http_error(500)
+        with self.assertRaises(github.GitHubListError) as ctx:
+            github.list_schemas("x")
+        self.assertIn("500 Client Error", str(ctx.exception))
+        self.assertNotIn("expired", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

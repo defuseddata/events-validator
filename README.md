@@ -50,7 +50,7 @@ graph TD
 *   **Performance Optimized**: Parallel fetching and analysis (GCS + Health checks) ensures a snappy UI even with 100+ schemas.
 *   **API Gateway Secured**: Protected by API Keys with automated managed service activation.
 *   **Fully Automated**: One-click deployment with built-in propagation delays for stability.
-*   **GA4 Ready**: Pre-loaded with 36 recommended GA4 event schemas and a master parameter repository.
+*   **GA4 Ready**: Pre-loaded with 35 recommended GA4 event schemas and a master parameter repository.
 
 ## 🏷️ Sample GTM Setup
 
@@ -307,6 +307,7 @@ The infrastructure is split into two independent projects for flexibility:
 1.  **Create a Repository**: Create a new, **empty** private repository on GitHub.com. Do not initialize with README/.gitignore.
 2.  **Generate a Token**: Create a Personal Access Token (PAT).
     *   **Classic Token (Recommended)**: Select scopes `repo` (full control) and `workflow`.
+    *   **Expiration**: GitHub proposes 30 days by default. When the token expires the UI stops working (`401`, "token is invalid or expired") until you create a new one, put it in `github_token` in `terraform_ui/terraform.tfvars` (and `terraform_backend/terraform.tfvars`) and run `terraform apply` in `terraform_ui`. Pick a longer expiration and set a reminder before the date.
     *   **Fine-grained Token**: Must have **Read and Write** access to:
         *   `Contents`
         *   `Secrets`
@@ -392,7 +393,7 @@ The `streamlit_ev/` application provides a "Parameter Repository" approach to sc
 ### Keyless Setup
 If you deployed using the steps above:
 - **Backend** (`terraform_backend`) has:
-  1.  Created the schema bucket and pre-loaded 36 GA4 schemas and `repo.json`.
+  1.  Created the schema bucket and pre-loaded 35 GA4 schemas and `repo.json`.
   2.  Created the BigQuery dataset and table for validation logs.
 - **UI** (`terraform_ui`) has:
   1.  Created a dedicated `streamlit-worker` Service Account.
