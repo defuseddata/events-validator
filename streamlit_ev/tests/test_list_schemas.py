@@ -102,21 +102,40 @@ class TestAuthHint(unittest.TestCase):
         r.raise_for_status.side_effect = requests.exceptions.HTTPError(f"{status} Client Error", response=r)
         return r
 
+    def _list_error(self, get, status):
+        get.return_value = self._http_error(status)
+        with self.assertRaises(github.GitHubListError) as ctx:
+            github.list_schemas("x")
+        return str(ctx.exception)
+
+    @patch.object(github, "GITHUB_TOKEN", "t")
     @patch.object(github.requests, "get")
     def test_401_says_token_is_invalid_or_expired(self, get, *_):
-        get.return_value = self._http_error(401)
-        with self.assertRaises(github.GitHubListError) as ctx:
-            github.list_schemas("x")
-        self.assertIn("invalid or has expired", str(ctx.exception))
-        self.assertIn("github_token", str(ctx.exception))
+        msg = self._list_error(get, 401)
+        self.assertIn("invalid or has expired", msg)
+        self.assertIn("github_token", msg)
 
+    @patch.object(github, "GITHUB_TOKEN", None)
+    @patch.object(github.requests, "get")
+    def test_missing_token_is_named_on_404_and_401(self, get, *_):
+        for status in (404, 401):
+            self.assertIn("token is not set", self._list_error(get, status))
+
+    @patch.object(github, "GITHUB_TOKEN", "t")
+    @patch.object(github.requests, "get")
+    def test_404_with_a_token_points_at_repo_or_scopes(self, get, *_):
+        msg = self._list_error(get, 404)
+        self.assertIn("404", msg)
+        self.assertIn("cannot access this private repository", msg)
+        self.assertNotIn("not set", msg)
+
+    @patch.object(github, "GITHUB_TOKEN", None)
     @patch.object(github.requests, "get")
     def test_other_errors_keep_the_original_message(self, get, *_):
-        get.return_value = self._http_error(500)
-        with self.assertRaises(github.GitHubListError) as ctx:
-            github.list_schemas("x")
-        self.assertIn("500 Client Error", str(ctx.exception))
-        self.assertNotIn("expired", str(ctx.exception))
+        msg = self._list_error(get, 500)
+        self.assertIn("500 Client Error", msg)
+        self.assertNotIn("not set", msg)
+        self.assertNotIn("expired", msg)
 
 
 if __name__ == "__main__":

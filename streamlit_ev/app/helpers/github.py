@@ -88,15 +88,30 @@ def list_branches() -> List[str]:
 
 
 def _auth_hint(e: Exception) -> str:
-    """Explain a GitHub 401: the token is invalid or expired (the usual cause)."""
+    """Explain a GitHub 401/404 that is usually a token problem, or "" for other errors.
+
+    GitHub answers 404 (not 401) when a private repository is requested without a
+    token or with one that cannot see it, so a missing token shows up as "Not Found".
+    """
     resp = getattr(e, "response", None)
-    if resp is not None and getattr(resp, "status_code", None) == 401:
+    status = getattr(resp, "status_code", None)
+    if status not in (401, 404):
+        return ""
+    if not GITHUB_TOKEN:
+        return (
+            "GitHub token is not set (GITHUB_TOKEN is empty), so a private repository "
+            "cannot be read. Set github_token in terraform_ui/terraform.tfvars and run terraform apply."
+        )
+    if status == 401:
         return (
             "GitHub rejected the token (401): it is invalid or has expired. "
             "Create a new token and set github_token in terraform_ui/terraform.tfvars, "
             "then run terraform apply."
         )
-    return ""
+    return (
+        "GitHub answered 404: the repository or branch was not found, or the token cannot "
+        "access this private repository. Check the repository name and the token's scopes."
+    )
 
 
 class GitHubListError(Exception):
