@@ -399,6 +399,12 @@ If you deployed using the steps above:
   2.  Granted it `Storage Object Admin` permissions on the schema bucket.
   3.  Granted it `BigQuery Data Viewer` and `Job User` permissions for reading logs.
   4.  Generated `streamlit_ev/.env` with your project, bucket, and BigQuery details. When GitOps is enabled it also contains the GitHub settings (`GITHUB_TOKEN`, `SCHEMA_REPO_OWNER`, `SCHEMA_REPO_NAME`, ...), so the local app runs in GitHub mode like the Cloud Run one. Terraform rewrites this file on every `apply`; change these values in `terraform_ui/terraform.tfvars`, not in `.env`.
+  5.  When GitOps is enabled, stored the GitHub token in **Secret Manager** (secret `event-validator-github-token`) and granted `Secret Manager Secret Accessor` on that one secret to the `streamlit-worker` Service Account. The Cloud Run service holds only a reference to the secret, so the token is not visible in the service configuration (console, `gcloud run services describe`). The app still reads it from the `GITHUB_TOKEN` environment variable. The token is still kept in plain text in `terraform.tfvars` and in the local Terraform state, so keep both private.
+
+### Rotating the GitHub token
+1.  Create a new token (same scopes as before) and put it in `github_token` in `terraform_ui/terraform.tfvars` (and in `terraform_backend/terraform.tfvars`).
+2.  Run `terraform apply` in `terraform_ui`. Terraform adds a new secret version and rolls out a new Cloud Run revision that uses it.
+3.  Revoke the old token on GitHub.
 
 ### Local Start
 1.  **Authenticate**: `gcloud auth application-default login`
