@@ -87,6 +87,33 @@ def list_branches() -> List[str]:
         return [DEFAULT_BRANCH]
 
 
+def _auth_hint(e: Exception) -> str:
+    """Explain a GitHub 401/404 that is usually a token problem, or "" for other errors.
+
+    GitHub answers 404 (not 401) when a private repository is requested without a
+    token or with one that cannot see it, so a missing token shows up as "Not Found".
+    """
+    resp = getattr(e, "response", None)
+    status = getattr(resp, "status_code", None)
+    if status not in (401, 404):
+        return ""
+    if not GITHUB_TOKEN:
+        return (
+            "GitHub token is not set (GITHUB_TOKEN is empty), so a private repository "
+            "cannot be read. Set github_token in terraform_ui/terraform.tfvars and run terraform apply."
+        )
+    if status == 401:
+        return (
+            "GitHub rejected the token (401): it is invalid or has expired. "
+            "Create a new token and set github_token in terraform_ui/terraform.tfvars, "
+            "then run terraform apply."
+        )
+    return (
+        "GitHub answered 404: the repository or branch was not found, or the token cannot "
+        "access this private repository. Check the repository name and the token's scopes."
+    )
+
+
 class GitHubListError(Exception):
     """Raised when the schema list cannot be fetched from GitHub."""
 
@@ -152,7 +179,7 @@ def list_schemas(branch: str = DEFAULT_BRANCH, max_age: float = 0) -> List[str]:
             )
     except requests.exceptions.RequestException as e:
         print(f"Error listing schemas: {e}")
-        raise GitHubListError(f"Could not list schemas on branch '{branch}': {e}") from e
+        raise GitHubListError(f"Could not list schemas on branch '{branch}': {_auth_hint(e) or e}") from e
 
     _schema_list_cache[branch] = (time.monotonic(), schema_files)
     return list(schema_files)
@@ -334,7 +361,7 @@ def write_schema(
                 error_msg = e.response.json().get("message", str(e))
             except:
                 pass
-        return False, f"Error saving {schema_name}: {error_msg}"
+        return False, f"Error saving {schema_name}: {_auth_hint(e) or error_msg}"
 
 
 def write_repo_json(
@@ -390,7 +417,7 @@ def write_repo_json(
                 error_msg = e.response.json().get("message", str(e))
             except:
                 pass
-        return False, f"Error saving repo.json: {error_msg}"
+        return False, f"Error saving repo.json: {_auth_hint(e) or error_msg}"
 
 
 def write_multiple_schemas(
@@ -515,7 +542,7 @@ def create_pull_request(
                 error_msg = e.response.json().get("message", str(e))
             except:
                 pass
-        return False, f"Error creating PR: {error_msg}", None
+        return False, f"Error creating PR: {_auth_hint(e) or error_msg}", None
 
 
 def get_commit_history(
