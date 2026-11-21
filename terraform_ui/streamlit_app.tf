@@ -13,7 +13,11 @@ resource "google_cloud_run_v2_service" "streamlit_ui" {
   ingress      = var.use_classic_load_balancer ? "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER" : "INGRESS_TRAFFIC_ALL"
   launch_stage = "GA" # IAP directly on Cloud Run is GA (since 2026-03-13)
   iap_enabled  = var.use_classic_load_balancer ? false : true
-  depends_on   = [google_artifact_registry_repository.streamlit_repo]
+  depends_on = [
+    google_artifact_registry_repository.streamlit_repo,
+    # The first revision must be able to read the secret when it starts.
+    google_secret_manager_secret_iam_member.streamlit_github_token_accessor,
+  ]
 
   lifecycle {
     # The API reports service-level scaling defaults (manual_instance_count = 0).
@@ -53,9 +57,18 @@ resource "google_cloud_run_v2_service" "streamlit_ui" {
         name  = "BQ_TABLE"
         value = var.bq_table
       }
-      env {
-        name  = "GITHUB_TOKEN"
-        value = var.github_token
+      # The token comes from Secret Manager (github_token_secret.tf), pinned to one version.
+      dynamic "env" {
+        for_each = local.github_token_enabled ? [1] : []
+        content {
+          name = "GITHUB_TOKEN"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.github_token[0].secret_id
+              version = google_secret_manager_secret_version.github_token[0].version
+            }
+          }
+        }
       }
       env {
         name  = "SCHEMA_REPO_OWNER"
