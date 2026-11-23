@@ -20,7 +20,7 @@ from helpers.storage import (
     clear_cache,
     list_schemas,
 )
-from helpers.components import render_branch_selector, render_storage_status
+from helpers.components import render_branch_selector
 
 def values_match(v1, v2, p_type):
     """Numeric-aware equality: '1' and '1.0' match for number fields."""
@@ -719,11 +719,7 @@ def render_builder():
 
     # Branch selector for GitHub mode
     if is_github_mode():
-        col_branch, col_status = st.columns([2, 3])
-        with col_branch:
-            render_branch_selector(key="builder_branch", compact=True)
-        with col_status:
-            render_storage_status()
+        render_branch_selector(key="builder_branch")
 
     st.session_state.setdefault("expanded_schema", True)
     st.session_state.setdefault("expanded_schema_builder", True)

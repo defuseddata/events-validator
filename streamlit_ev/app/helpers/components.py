@@ -45,38 +45,52 @@ def render_branch_selector(
 
     current_idx = branches.index(current) if current in branches else 0
 
-    if compact:
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            new_branch = st.selectbox(
-                "Branch",
-                branches,
-                index=current_idx,
-                key=key,
-                label_visibility="collapsed",
-            )
-        with col2:
-            if show_create:
-                if st.button("New", key=f"{key}_create", help="Create new branch"):
-                    _show_create_branch_dialog()
-    else:
-        col1, col2, col3 = st.columns([4, 1, 1])
-        with col1:
-            new_branch = st.selectbox(
-                "Branch",
-                branches,
-                index=current_idx,
-                key=key,
-                help="Select the branch to work with",
-            )
-        with col2:
-            if st.button("Refresh", key=f"{key}_refresh", use_container_width=True):
-                clear_cache()
-                st.rerun()
-        with col3:
-            if show_create:
-                if st.button("Create Branch", key=f"{key}_create_btn", use_container_width=True):
-                    _show_create_branch_dialog()
+    from helpers.github import DEFAULT_BRANCH
+
+    info = get_storage_info()
+
+    # One compact row, identical on every page. `compact` is kept only for
+    # backward compatibility. Buttons are icon-only (tooltip via `help`) so
+    # they never wrap.
+    widths = [5, 1, 1, 7] if show_create else [5, 1, 8]
+    cols = st.columns(widths, vertical_alignment="center")
+    col_sel, col_refresh = cols[0], cols[1]
+    col_new = cols[2] if show_create else None
+    col_badge = cols[-1]
+
+    with col_sel:
+        new_branch = st.selectbox(
+            "Branch",
+            branches,
+            index=current_idx,
+            key=key,
+            label_visibility="collapsed",
+            help="Select the branch to work with",
+        )
+    with col_refresh:
+        if st.button(
+            ":material/refresh:",
+            key=f"{key}_refresh",
+            help="Refresh from GitHub",
+            use_container_width=True,
+        ):
+            clear_cache()
+            st.rerun()
+    if col_new is not None:
+        with col_new:
+            if st.button(
+                ":material/add:",
+                key=f"{key}_create_btn",
+                help="Create new branch",
+                use_container_width=True,
+            ):
+                _show_create_branch_dialog()
+    with col_badge:
+        label = f"GitHub · {info['owner']}/{info['repo']} @ {current}".replace("]", ")")
+        badges = f":gray-badge[{label}]"
+        if current == DEFAULT_BRANCH:
+            badges += " :orange-badge[:material/lock: production]"
+        st.markdown(badges)
 
     # Handle branch change
     if new_branch != current:

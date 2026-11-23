@@ -33,11 +33,9 @@ def render_explorer():
     st.title("Schema Explorer")
 
     # Branch selector and storage info
-    col_branch, col_status = st.columns([2, 3])
-    with col_branch:
-        if is_github_mode():
-            render_branch_selector(key="explorer_branch")
-    with col_status:
+    if is_github_mode():
+        render_branch_selector(key="explorer_branch")
+    else:
         render_storage_status()
 
     # Session-bound Cache Initialization
@@ -62,12 +60,13 @@ def render_explorer():
     # ---------------------------------------------------------
     # CACHE CONTROL
     # ---------------------------------------------------------
-    c1, c2 = st.columns([8, 2])
-    with c2:
-        refresh_label = "Refresh from GitHub" if is_github_mode() else "Refresh from Cloud"
-        if st.button(f"{refresh_label}", use_container_width=True):
-            clear_cache()
-            st.rerun()
+    # In GitHub mode the refresh icon lives in the branch bar above.
+    if not is_github_mode():
+        c1, c2 = st.columns([8, 2])
+        with c2:
+            if st.button("Refresh from Cloud", use_container_width=True):
+                clear_cache()
+                st.rerun()
 
     # ---------------------------------------------------------
     # PARALLEL FETCHING & ANALYSIS

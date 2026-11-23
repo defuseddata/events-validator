@@ -13,7 +13,7 @@ from helpers.storage import (
     DEFAULT_BRANCH_BLOCKED_MESSAGE,
     clear_cache,
 )
-from helpers.components import render_branch_selector, render_storage_status
+from helpers.components import render_branch_selector
 from helpers.helpers import render_field_row, pretty_schema_inline
 from helpers.updater import (
     find_impacted_schemas,
@@ -124,11 +124,7 @@ def render_repo():
 
     # Branch selector and storage info
     if is_github_mode():
-        col_branch, col_status = st.columns([2, 3])
-        with col_branch:
-            render_branch_selector(key="repo_branch")
-        with col_status:
-            render_storage_status()
+        render_branch_selector(key="repo_branch")
 
     col = st.columns([1, 1])
     with col[0]:
