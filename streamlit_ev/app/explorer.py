@@ -62,11 +62,9 @@ def render_explorer():
     # ---------------------------------------------------------
     # In GitHub mode the refresh icon lives in the branch bar above.
     if not is_github_mode():
-        c1, c2 = st.columns([8, 2])
-        with c2:
-            if st.button("Refresh from Cloud", use_container_width=True):
-                clear_cache()
-                st.rerun()
+        if st.button(":material/refresh:", help="Refresh from Cloud", key="explorer_refresh"):
+            clear_cache()
+            st.rerun()
 
     # ---------------------------------------------------------
     # PARALLEL FETCHING & ANALYSIS
