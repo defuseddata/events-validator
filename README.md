@@ -179,6 +179,7 @@ Running this setup on GCP is designed to be cost-effective for validation worklo
 
 *   **Approximate Cost**: ~$0.50 per day for ~50,000 processed events.
 *   *Includes*: Cloud Functions invocations, Cloud Storage class A/B operations, and minimal BigQuery streaming ingestion.
+*   *Not included*: the optional Streamlit UI (Cloud Run) and, if you choose the Classic Global Load Balancer for IAP, about $18/month for the load balancer.
 *   *Note*: Costs may vary based on exact payload size and region.
 
 ### 📊 Granular Logging Control
@@ -196,9 +197,11 @@ Configure these flags in `terraform_backend/terraform.tfvars` to balance visibil
 
 1.  **GCP Project**: An active Google Cloud Project with **[Billing Account linked](https://console.cloud.google.com/billing)**.
     *   *Crucial*: Many APIs (Compute, Cloud Build, API Gateway) will fail to activate or describe without an active billing account, causing the installer to hang or error.
-3.  **Tools**:
+2.  **Tools**:
     *   [Terraform](https://developer.hashicorp.com/terraform/downloads) (>= 1.5.0)
     *   [gcloud CLI](https://cloud.google.com/sdk/docs/install) (authenticated: `gcloud auth application-default login`)
+    *   [jq](https://jqlang.github.io/jq/) (required by `install.sh`)
+    *   [GitHub CLI (`gh`)](https://cli.github.com/) (authenticated: `gh auth login`), only if you enable GitOps in the wizard
 3.  **Local Node.js**: (Optional, for local testing) Node.js 20+.
 
 ## 🔑 Authentication Methods
@@ -278,7 +281,7 @@ To make provisioning flawless and "Zero-Touch", we provide a unified Setup Wizar
 ### Step 0: Initial Requirements
 1.  **Authenticate your terminal users**:
     *   GCP: `gcloud auth application-default login`
-    *   GitHub: `gh auth login`
+    *   GitHub (only if you enable GitOps): `gh auth login`
 
 ### Step 1: Run the Wizard
 Execute the installer from the root directory:
@@ -289,10 +292,10 @@ Execute the installer from the root directory:
 **The script will interactively:**
 1. Verify access to your desired GCP Project and compute regions.
 2. Bind Application Default Credentials to bypass limits safely (no `.json` required!).
-3. Automatically provision or connect an existing GitHub Repository for schemas.
+3. Optionally (GitOps, you are asked `Enable GitOps? [Y/n]`) provision or connect a GitHub repository for schemas. If you decline, GitHub is skipped and schemas live in Cloud Storage only.
 4. Auto-generate all required `.tfvars` securely without pushing them to Git.
 5. Deploy the backend and retrieve Gateway URLs.
-6. Gather OAuth credentials and fully deploy the UI via Cloud Build + Cloud Run.
+6. Optionally (you are asked whether to deploy the UI) gather OAuth credentials and deploy the UI via Cloud Build + Cloud Run. The wizard asks for OAuth credentials, which you create beforehand in the Cloud console (see *Manual Prerequisites* below).
 
 ---
 
@@ -384,6 +387,16 @@ cp terraform.tfvars.example terraform.tfvars
     ```
     *Response:* `{"status":"event valid","eventsLogged":1}`
 
+3.  **Responses**: the endpoint answers with:
+
+    | HTTP | `status` | Meaning |
+    | :--- | :--- | :--- |
+    | `200` | `event valid` | The event matches its schema. |
+    | `400` | `validation_failed` | At least one field failed. The response has `errorsLogged` (number of failed fields), and each failure is logged to BigQuery. |
+    | `400` | `invalid_request` / `config_error` | No body, no event data at the configured path, missing event name, or incomplete function configuration. |
+    | `404` | `schema_not_found` | No schema file exists for that event name. **Nothing is logged to BigQuery** for such events. |
+    | `500` | `error` | Internal error while loading the schema or validating. |
+
 ---
 
 ## 💡 Schema Management UI (Streamlit)
@@ -418,8 +431,6 @@ If you deployed using the steps above:
     ```bash
     uv run streamlit run app/app.py
     ```
-
-### Production Deployment (Cloud Run + IAP)
 
 ### Production Deployment (Cloud Run + IAP)
 
