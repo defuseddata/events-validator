@@ -340,6 +340,8 @@ if [[ ! "$ENABLE_GITOPS" =~ ^[Nn] ]]; then
     echo "This script requires a GitHub Personal Access Token (PAT)."
     echo "It MUST have the following scopes checked: [repo] and [workflow]."
     echo -e "${YELLOW}Generate one quickly here: https://github.com/settings/tokens/new?scopes=repo,workflow&description=Event+Validator+Deployment${NC}"
+    echo -e "${YELLOW}Note: GitHub proposes a 30-day expiration. When the token expires the UI stops working until you replace it"
+    echo -e "(github_token in terraform_ui/terraform.tfvars, then terraform apply). Choose a longer expiration and set a reminder.${NC}"
     echo ""
 
 while true; do
