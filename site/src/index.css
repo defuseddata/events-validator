@@ -1,0 +1,145 @@
+@import "tailwindcss";
+@import "@fontsource-variable/figtree";
+
+/*
+ * Design values mirrored from the Defused Data site (colours, square corners,
+ * red section tag). Typeface: Figtree (OFL), self-hosted via @fontsource, no CDN.
+ */
+@theme {
+  --font-sans: "Figtree Variable", "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  --color-brand: #d52239;
+  --color-brand-dark: #b81b2e;
+  --color-ink: #0f121b;
+  --color-ink-soft: #1d212d;
+  --color-paper: #efefef;
+  --color-line: #dddfe6;
+  --color-muted: #5f6670;
+
+  --radius-md: 0.125rem;
+  --radius-lg: 0.125rem;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+  }
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink-soft);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1,
+  h2 {
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+@layer components {
+  .dd-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-brand-dark);
+    text-transform: uppercase;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.01em;
+  }
+  .bg-ink .dd-tag,
+  .bg-ink-soft .dd-tag {
+    color: #ff7a8a;
+  }
+  .dd-tag::before {
+    content: "";
+    width: 0.625rem;
+    height: 0.625rem;
+    flex: none;
+    background-color: var(--color-brand);
+  }
+  .dd-nav-link {
+    position: relative;
+    padding: 0.25rem 0;
+    color: #eee;
+    font-size: 0.9375rem;
+    transition: color 0.2s;
+  }
+  .dd-nav-link::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 -2px 0;
+    height: 2px;
+    background-color: var(--color-brand);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.25s ease;
+  }
+  .dd-nav-link:hover::after {
+    transform: scaleX(1);
+  }
+  .dd-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid rgb(255 255 255 / 0.2);
+    background: rgb(255 255 255 / 0.06);
+    padding: 0.4rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #e8eaf0;
+  }
+  .dd-chip::before {
+    content: "";
+    width: 0.4rem;
+    height: 0.4rem;
+    flex: none;
+    background-color: var(--color-brand);
+  }
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-brand);
+    color: #fff;
+    font-weight: 700;
+    padding: 0.75rem 1.5rem;
+    border-radius: 9999px;
+    transition: background-color 0.2s;
+    white-space: nowrap;
+  }
+  .btn-primary:hover {
+    background: var(--color-brand-dark);
+  }
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgb(255 255 255 / 0.35);
+    color: #fff;
+    font-weight: 700;
+    padding: 0.75rem 1.5rem;
+    border-radius: 9999px;
+    transition: border-color 0.2s, background-color 0.2s;
+    white-space: nowrap;
+  }
+  .btn-ghost:hover {
+    border-color: #fff;
+    background: rgb(255 255 255 / 0.08);
+  }
+}

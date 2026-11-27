@@ -38,6 +38,7 @@ venv/
 !terraform_backend/src/GA4 Recommended/**/*.json
 !terraform_backend/src/templates/*.tpl
 !terraform_ui/terraform.tfvars.example
+!site/tsconfig.json
 
 
 # --- Terraform ---
@@ -52,3 +53,5 @@ venv/
 .terraform.lock.hcl
 !*.tfvars.example
 !.env.example
+# landing page build output
+site/dist/
